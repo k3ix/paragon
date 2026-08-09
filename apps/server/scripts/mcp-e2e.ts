@@ -18,7 +18,9 @@ for (const s of ["", "-wal", "-shm"]) if (existsSync(DB + s)) unlinkSync(DB + s)
 // Seed categories into the scratch database before the server opens it.
 process.env.DB_PATH = DB;
 const { migrate } = await import("drizzle-orm/bun-sqlite/migrator");
-const { db } = await import(join(SERVER_ROOT, "src/db"));
+// The import must stay dynamic so DB_PATH is set first, but the type can be taken
+// statically — `typeof import()` is erased at runtime and loads nothing.
+const { db }: { db: typeof import("../src/db").db } = await import(join(SERVER_ROOT, "src/db"));
 migrate(db, { migrationsFolder: join(SERVER_ROOT, "drizzle") });
 const { createCategory } = await import(join(SERVER_ROOT, "src/services/categories"));
 const food = createCategory({ name: "Food" });
