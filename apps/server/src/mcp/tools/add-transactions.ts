@@ -9,7 +9,8 @@ export const def = {
     title: "Add transactions",
     description:
       "Records one or more transactions read from receipts, push notifications or a bank statement. " +
-      "Call list_categories first so category paths match the existing tree. " +
+      "Call list_categories first so category paths match the existing tree, and call " +
+      "get_merchant for each merchant to reuse the category that shop was filed under before. " +
       "Line item amounts must sum exactly to the transaction total; when a receipt covers several " +
       "categories, split it into a line per category. Omit lineItems when there is no breakdown — " +
       "one uncategorized line covering the total is written instead. Sending the same receipt twice " +
