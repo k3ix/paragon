@@ -2,15 +2,18 @@
   "name": "@paragon/server",
   "version": "0.0.1",
   "scripts": {
+    "dev": "bun run --watch src/index.ts",
     "mcp": "bun run src/mcp/index.ts",
     "mcp:e2e": "bun run scripts/mcp-e2e.ts",
     "db:generate": "bunx drizzle-kit generate",
     "db:migrate": "bun run src/db/migrate.ts"
   },
   "dependencies": {
-    "@paragon/shared": "workspace:*",
+    "@elysiajs/cors": "^1.4.2",
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "@paragon/shared": "workspace:*",
     "drizzle-orm": "^0.45.2",
+    "elysia": "^1.4.29",
     "zod": "^4.4.3"
   },
   "devDependencies": {
