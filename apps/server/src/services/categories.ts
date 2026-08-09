@@ -1,13 +1,10 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
+import type { CategoryNode } from "@paragon/shared";
 import { db } from "../db";
 import { categories } from "../db/schema";
 
-export type CategoryNode = {
-  id: number;
-  name: string;
-  isFixed: boolean;
-  children: CategoryNode[];
-};
+// Shared with the browser: it describes the shape the API returns.
+export type { CategoryNode };
 
 export function createCategory(input: {
   name: string;

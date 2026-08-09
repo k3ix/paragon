@@ -20,3 +20,11 @@ export type CategorySlice = {
   totalMinor: number;
   share: number;
 };
+
+/** A category and its children. Depth is unlimited. */
+export type CategoryNode = {
+  id: number;
+  name: string;
+  isFixed: boolean;
+  children: CategoryNode[];
+};

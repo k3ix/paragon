@@ -7,6 +7,7 @@ import { MonthTotals } from "./components/MonthTotals";
 import { CategoryBreakdown } from "./components/CategoryBreakdown";
 import { TrendChart } from "./components/TrendChart";
 import { TransactionList } from "./components/TransactionList";
+import { TransactionEditor } from "./components/TransactionEditor";
 
 export function App() {
   const [month, setMonth] = useState(currentMonth);
@@ -39,7 +40,12 @@ export function App() {
           {summary.data && <MonthTotals summary={summary.data} />}
           {breakdown.data && <CategoryBreakdown slices={breakdown.data} />}
           {trend.data && <TrendChart trend={trend.data} />}
-          {transactions.data && <TransactionList rows={transactions.data.rows} />}
+          {transactions.data && (
+            <TransactionList
+              rows={transactions.data.rows}
+              renderEditor={(row, close) => <TransactionEditor row={row} onClose={close} />}
+            />
+          )}
         </div>
       )}
     </main>
