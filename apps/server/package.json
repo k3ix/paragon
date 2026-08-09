@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "scripts": {
     "mcp": "bun run src/mcp/index.ts",
+    "mcp:e2e": "bun run scripts/mcp-e2e.ts",
     "db:generate": "bunx drizzle-kit generate",
     "db:migrate": "bun run src/db/migrate.ts"
   },
