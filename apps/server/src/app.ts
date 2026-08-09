@@ -10,6 +10,7 @@ import { listTransactions } from "./services/queries";
 import { updateTransaction, deleteTransaction } from "./services/transactions";
 import { listMerchants } from "./services/merchants";
 import { reassignLineItems, previewReassign } from "./services/reassign";
+import { getSummary } from "./services/report";
 
 // Matches the shape "YYYY-MM". The month *number* is still validated in the service,
 // because 2026-13 matches this pattern but is not a month.
@@ -85,6 +86,8 @@ export const app = new Elysia({ prefix: "/api" })
   )
 
   .get("/merchants", () => listMerchants())
+
+  .get("/report", ({ query }) => getSummary(query.month), { query: monthQuery })
 
   .patch("/transactions/:id", ({ params, body }) => updateTransaction(Number(params.id), body), {
     params: t.Object({ id: t.String() }),

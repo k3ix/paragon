@@ -136,3 +136,37 @@ describe("GET /api/merchants", () => {
     expect(body[0].nameNorm).toBe("biedronka");
   });
 });
+
+describe("GET /api/report", () => {
+  it("returns the month with its deltas", async () => {
+    seed();
+    addTransactions([
+      {
+        date: "2026-07-09",
+        total: "100.00",
+        merchant: "Shop",
+        lineItems: [{ amount: "100.00", category: "Food/Groceries" }],
+      },
+      {
+        date: "2026-08-09",
+        total: "250.00",
+        merchant: "Shop",
+        lineItems: [{ amount: "250.00", category: "Food/Groceries" }],
+      },
+    ]);
+
+    const res = await api("/api/report?month=2026-08");
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body.spentMinor).toBe(25000);
+    expect(body.previous.month).toBe("2026-07");
+    expect(body.spentDeltaMinor).toBe(15000);
+  });
+
+  it("rejects an invalid month", async () => {
+    seed();
+    const res = await api("/api/report?month=2026-13");
+    expect(res.status).toBe(422);
+  });
+});
