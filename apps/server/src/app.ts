@@ -11,21 +11,22 @@ const monthQuery = t.Object({ month: t.String({ pattern: monthPattern }) });
 
 export const app = new Elysia({ prefix: "/api" })
   /*
-   * A bad month reaches the services as a thrown Error. Without this it would surface
-   * as a 500, which reads as "the server is broken" rather than "that is not a month".
+   * A bad month reaches the services as a thrown Error, which would otherwise surface
+   * as a 500 — reading as "the server is broken" rather than "that is not a month".
+   *
+   * The status is set without returning a body: returning one here would widen every
+   * route's response type with the error shape, forcing the browser to narrow a union
+   * before touching any field. Elysia still serialises the thrown error.
    */
   .onError(({ code, error, set }) => {
     if (code === "VALIDATION") {
       set.status = 422;
-      return { error: "Invalid query parameters" };
+      return;
     }
     const message = error instanceof Error ? error.message : String(error);
     if (/^Invalid month/i.test(message)) {
       set.status = 422;
-      return { error: message };
     }
-    set.status = 500;
-    return { error: message };
   })
 
   .get("/categories", () => listCategories())

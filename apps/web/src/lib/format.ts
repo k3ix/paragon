@@ -1,0 +1,39 @@
+import { formatMinor } from "@paragon/shared";
+
+/** Amount with a thousands separator, e.g. "1 234.56". Sign is kept. */
+export function money(minor: number): string {
+  const [whole, fraction] = formatMinor(minor).split(".");
+  const negative = whole!.startsWith("-");
+  const digits = negative ? whole!.slice(1) : whole!;
+  const grouped = digits.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return `${negative ? "−" : ""}${grouped}.${fraction}`;
+}
+
+/** "2026-08" to "August 2026". */
+export function monthLabel(month: string): string {
+  const [year, m] = month.split("-");
+  const date = new Date(Date.UTC(Number(year), Number(m) - 1, 1));
+  return date.toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+}
+
+/** Unix seconds to "9 Aug". */
+export function dayLabel(occurredOn: number): string {
+  return new Date(occurredOn * 1000).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  });
+}
+
+/** The current month as "YYYY-MM". */
+export function currentMonth(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Shifts "YYYY-MM" by a signed number of months. */
+export function shiftMonth(month: string, delta: number): string {
+  const [year, m] = month.split("-").map(Number);
+  const total = year! * 12 + (m! - 1) + delta;
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;
+}

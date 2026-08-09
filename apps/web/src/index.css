@@ -1,0 +1,60 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+
+@theme {
+  --color-ink-900: #12151a;
+  --color-ink-800: #171b21;
+  --color-ink-700: #222831;
+  --color-ink-500: #3f4652;
+  --color-ink-300: #8b93a1;
+  --color-ink-100: #e6e8eb;
+  --color-gain: #4ade80;
+  --color-drain: #f87171;
+  --color-flag: #fbbf24;
+
+  /* Category ramp, assigned by rank so a category keeps its colour page-wide. */
+  --color-slice-1: #4ade80;
+  --color-slice-2: #60a5fa;
+  --color-slice-3: #fbbf24;
+  --color-slice-4: #f87171;
+  --color-slice-5: #a78bfa;
+  --color-slice-6: #5eead4;
+
+  --font-sans: "Geist Variable", system-ui, sans-serif;
+  --radius-card: 10px;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-ink-900);
+  color: var(--color-ink-100);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * Every figure on the page uses tabular digits. In a ledger, columns of numbers
+ * that do not line up are a defect, and a changing value must not shift its
+ * neighbours.
+ */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-gain);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
