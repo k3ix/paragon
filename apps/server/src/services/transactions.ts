@@ -4,7 +4,7 @@ import { db } from "../db";
 import { transactions, lineItems, merchants } from "../db/schema";
 import { parseAmountToMinor } from "../money";
 import { normalizeMerchant, computeDedupHash } from "./dedup";
-import { findCategoryByPath } from "./categories";
+import { resolveLines, assertLinesMatchTotal } from "./invariants";
 
 export type { AddTransactionInput };
 
@@ -77,32 +77,9 @@ function addOne(item: AddTransactionInput): AddResult {
   const occurredOn = parseDate(item.date);
   const totalMinor = parseAmountToMinor(item.total);
 
-  // No breakdown means one line for the whole amount, left uncategorized. A push
-  // notification carries an amount but no receipt, so the category comes later.
-  const lines = item.lineItems?.length
-    ? item.lineItems
-    : [{ amount: item.total, category: undefined, note: undefined }];
-
   // Resolve categories before opening the transaction so a bad path fails cleanly.
-  const resolved = lines.map((line) => {
-    const amountMinor = parseAmountToMinor(line.amount);
-    if (!line.category) {
-      return { amountMinor, categoryId: null, note: line.note ?? null };
-    }
-    const categoryId = findCategoryByPath(line.category);
-    if (categoryId === null) {
-      throw new Error(`Unknown category path: ${line.category}`);
-    }
-    return { amountMinor, categoryId, note: line.note ?? null };
-  });
-
-  const sum = resolved.reduce((acc, line) => acc + line.amountMinor, 0);
-  if (sum !== totalMinor) {
-    throw new Error(
-      `Line items sum (${sum}) does not match the total (${totalMinor}). ` +
-        `Difference: ${totalMinor - sum} minor units.`,
-    );
-  }
+  const resolved = resolveLines(item.lineItems, item.total);
+  assertLinesMatchTotal(resolved, totalMinor);
 
   const merchantRaw = item.merchant ?? null;
   const merchantNorm = merchantRaw ? normalizeMerchant(merchantRaw) : "";
