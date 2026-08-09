@@ -1,7 +1,13 @@
 import { describe, expect, it, beforeEach } from "bun:test";
 import { eq } from "drizzle-orm";
 import { resetTestDb, db, schema } from "./helpers/db";
-import { listCategories, createCategory, findCategoryByPath } from "../src/services/categories";
+import {
+  listCategories,
+  createCategory,
+  findCategoryByPath,
+  updateCategory,
+  archiveCategory,
+} from "../src/services/categories";
 
 beforeEach(() => {
   resetTestDb();
@@ -102,5 +108,90 @@ describe("findCategoryByPath", () => {
     const food = createCategory({ name: "Food" });
     createCategory({ name: "Groceries", parentId: food.id });
     expect(findCategoryByPath("Groceries")).toBeNull();
+  });
+});
+
+describe("updateCategory", () => {
+  it("renames a category", () => {
+    const food = createCategory({ name: "Food" });
+    updateCategory(food.id, { name: "Groceries & Food" });
+    expect(listCategories()[0]!.name).toBe("Groceries & Food");
+  });
+
+  it("moves a category to another parent", () => {
+    const home = createCategory({ name: "Home" });
+    const household = createCategory({ name: "Household", parentId: home.id });
+    const repairs = createCategory({ name: "Repairs", parentId: household.id });
+
+    updateCategory(repairs.id, { parentId: home.id });
+
+    const tree = listCategories();
+    expect(tree[0]!.children.map((c) => c.name).sort()).toEqual(["Household", "Repairs"]);
+  });
+
+  it("promotes a category to the root", () => {
+    const home = createCategory({ name: "Home" });
+    const repairs = createCategory({ name: "Repairs", parentId: home.id });
+
+    updateCategory(repairs.id, { parentId: null });
+
+    expect(
+      listCategories()
+        .map((c) => c.name)
+        .sort(),
+    ).toEqual(["Home", "Repairs"]);
+  });
+
+  it("changes the fixed flag", () => {
+    const rent = createCategory({ name: "Rent" });
+    updateCategory(rent.id, { isFixed: true });
+    expect(listCategories()[0]!.isFixed).toBe(true);
+  });
+
+  it("refuses to make a category its own parent", () => {
+    const food = createCategory({ name: "Food" });
+    expect(() => updateCategory(food.id, { parentId: food.id })).toThrow(/cycle|itself/i);
+  });
+
+  it("refuses to move a category under its own descendant", () => {
+    const home = createCategory({ name: "Home" });
+    const household = createCategory({ name: "Household", parentId: home.id });
+
+    // Home under Household would make the tree circular and hang every path walk.
+    expect(() => updateCategory(home.id, { parentId: household.id })).toThrow(/cycle|descendant/i);
+  });
+
+  it("rejects an unknown id", () => {
+    expect(() => updateCategory(9999, { name: "x" })).toThrow(/not found/i);
+  });
+});
+
+describe("archiveCategory", () => {
+  it("hides the category from the tree", () => {
+    const food = createCategory({ name: "Food" });
+    createCategory({ name: "Groceries", parentId: food.id });
+
+    archiveCategory(food.id);
+
+    // The child is promoted rather than vanishing: listCategories treats a node whose
+    // parent is archived as a root.
+    expect(listCategories().map((c) => c.name)).toEqual(["Groceries"]);
+  });
+
+  it("keeps the row so past reports still resolve it", () => {
+    const food = createCategory({ name: "Food" });
+    archiveCategory(food.id);
+
+    const row = db
+      .select()
+      .from(schema.categories)
+      .all()
+      .find((c) => c.id === food.id);
+    expect(row).toBeDefined();
+    expect(row!.archivedAt).not.toBeNull();
+  });
+
+  it("rejects an unknown id", () => {
+    expect(() => archiveCategory(9999)).toThrow(/not found/i);
   });
 });

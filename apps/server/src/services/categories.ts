@@ -89,3 +89,69 @@ export function findCategoryByPath(path: string): number | null {
 
   return parentId;
 }
+
+/** True when `candidateParent` is `id` itself or sits beneath it. */
+function wouldCreateCycle(id: number, candidateParent: number): boolean {
+  if (id === candidateParent) return true;
+
+  const rows = db
+    .select({ id: categories.id, parentId: categories.parentId })
+    .from(categories)
+    .all();
+  const parentOf = new Map(rows.map((r) => [r.id, r.parentId]));
+
+  const visited = new Set<number>();
+  let current: number | null = candidateParent;
+  while (current !== null && !visited.has(current)) {
+    if (current === id) return true;
+    visited.add(current);
+    current = parentOf.get(current) ?? null;
+  }
+  return false;
+}
+
+export function updateCategory(
+  id: number,
+  patch: { name?: string; parentId?: number | null; isFixed?: boolean },
+): { id: number; name: string } {
+  const existing = db.select().from(categories).where(eq(categories.id, id)).get();
+  if (!existing) throw new Error(`Category not found: ${id}`);
+
+  if (patch.parentId !== undefined && patch.parentId !== null) {
+    const parent = db.select().from(categories).where(eq(categories.id, patch.parentId)).get();
+    if (!parent) throw new Error(`Parent category not found: ${patch.parentId}`);
+    // Depth is unlimited, so a cycle would hang every walk that climbs to a root.
+    if (wouldCreateCycle(id, patch.parentId)) {
+      throw new Error("That move would create a cycle: a category cannot sit under itself.");
+    }
+  }
+
+  db.update(categories)
+    .set({
+      name: patch.name ?? existing.name,
+      parentId: patch.parentId === undefined ? existing.parentId : patch.parentId,
+      isFixed: patch.isFixed ?? existing.isFixed,
+    })
+    .where(eq(categories.id, id))
+    .run();
+
+  return { id, name: patch.name ?? existing.name };
+}
+
+/**
+ * Archives a category instead of deleting it.
+ *
+ * Deleting would either orphan its line items or cascade them away; both destroy
+ * history. An archived category disappears from pickers and keeps resolving in reports.
+ */
+export function archiveCategory(id: number): { archived: true } {
+  const existing = db.select().from(categories).where(eq(categories.id, id)).get();
+  if (!existing) throw new Error(`Category not found: ${id}`);
+
+  db.update(categories)
+    .set({ archivedAt: Math.floor(Date.now() / 1000) })
+    .where(eq(categories.id, id))
+    .run();
+
+  return { archived: true };
+}
