@@ -4,7 +4,8 @@ import { db } from "../db";
 import { transactions, lineItems, merchants } from "../db/schema";
 import { parseAmountToMinor } from "../money";
 import { normalizeMerchant, computeDedupHash } from "./dedup";
-import { resolveLines, assertLinesMatchTotal } from "./invariants";
+import { resolveLines, assertLinesMatchTotal, type LineInput } from "./invariants";
+import { listTransactions, type TransactionRow } from "./queries";
 
 export type { AddTransactionInput };
 
@@ -139,4 +140,136 @@ function addOne(item: AddTransactionInput): AddResult {
 
     return { status: "created" as const, id: inserted.id };
   });
+}
+
+/**
+ * Applies a partial edit to a transaction.
+ *
+ * The dedup hash is recomputed whenever the date, total or merchant changes, so an
+ * edit cannot quietly produce a row identical to an existing one — the same guard
+ * that protects the write path protects the edit path.
+ */
+export function updateTransaction(
+  id: number,
+  patch: {
+    date?: string;
+    total?: string | number;
+    type?: "expense" | "income" | "transfer";
+    merchant?: string | null;
+    note?: string | null;
+    lineItems?: LineInput[];
+  },
+): TransactionRow {
+  const existing = db.select().from(transactions).where(eq(transactions.id, id)).get();
+  if (!existing) throw new Error(`Transaction not found: ${id}`);
+
+  const existingLines = db.select().from(lineItems).where(eq(lineItems.transactionId, id)).all();
+
+  const occurredOn = patch.date === undefined ? existing.occurredOn : parseDate(patch.date);
+  const totalMinor =
+    patch.total === undefined ? existing.totalMinor : parseAmountToMinor(patch.total);
+  const merchantRaw = patch.merchant === undefined ? existing.merchantRaw : patch.merchant;
+  const type = patch.type ?? (existing.type as "expense" | "income" | "transfer");
+
+  // Changing the total with several lines present has no single right answer: the
+  // server cannot know which line absorbs the difference. The caller must send lines.
+  if (
+    patch.lineItems === undefined &&
+    patch.total !== undefined &&
+    existingLines.length > 1 &&
+    totalMinor !== existing.totalMinor
+  ) {
+    throw new Error(
+      "Changing the total requires line items when the receipt has more than one line.",
+    );
+  }
+
+  const resolved =
+    patch.lineItems !== undefined
+      ? resolveLines(patch.lineItems, totalMinor)
+      : existingLines.length === 1
+        ? [
+            {
+              amountMinor: totalMinor,
+              categoryId: existingLines[0]!.categoryId,
+              note: existingLines[0]!.note,
+            },
+          ]
+        : existingLines.map((l) => ({
+            amountMinor: l.amountMinor,
+            categoryId: l.categoryId,
+            note: l.note,
+          }));
+
+  assertLinesMatchTotal(resolved, totalMinor);
+
+  const merchantNorm = merchantRaw ? normalizeMerchant(merchantRaw) : "";
+  const dedupHash = computeDedupHash({ occurredOn, totalMinor, merchantNorm });
+
+  const clash = db
+    .select({ id: transactions.id })
+    .from(transactions)
+    .where(eq(transactions.dedupHash, dedupHash))
+    .get();
+  if (clash && clash.id !== id) {
+    throw new Error(
+      `A transaction with the same date, amount and merchant already exists (#${clash.id}).`,
+    );
+  }
+
+  db.transaction((tx) => {
+    const merchantId =
+      merchantNorm && type !== "transfer"
+        ? upsertMerchant(
+            merchantNorm,
+            occurredOn,
+            resolved.length === 1 && resolved[0]!.categoryId !== null
+              ? resolved[0]!.categoryId
+              : null,
+          )
+        : null;
+
+    tx.update(transactions)
+      .set({
+        occurredOn,
+        type,
+        totalMinor,
+        merchantRaw,
+        merchantId,
+        note: patch.note === undefined ? existing.note : patch.note,
+        dedupHash,
+      })
+      .where(eq(transactions.id, id))
+      .run();
+
+    tx.delete(lineItems).where(eq(lineItems.transactionId, id)).run();
+    for (const line of resolved) {
+      tx.insert(lineItems)
+        .values({
+          transactionId: id,
+          amountMinor: line.amountMinor,
+          categoryId: line.categoryId,
+          note: line.note,
+        })
+        .run();
+    }
+  });
+
+  const row = listTransactions({}).rows.find((r) => r.id === id);
+  if (!row) throw new Error(`Transaction not found after update: ${id}`);
+  return row;
+}
+
+export function deleteTransaction(id: number): { deleted: true } {
+  const existing = db.select().from(transactions).where(eq(transactions.id, id)).get();
+  if (!existing) throw new Error(`Transaction not found: ${id}`);
+
+  // line_items has ON DELETE CASCADE, but the delete is explicit so the intent is
+  // visible at the call site rather than resting on a schema detail.
+  db.transaction((tx) => {
+    tx.delete(lineItems).where(eq(lineItems.transactionId, id)).run();
+    tx.delete(transactions).where(eq(transactions.id, id)).run();
+  });
+
+  return { deleted: true };
 }
