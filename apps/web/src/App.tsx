@@ -1,25 +1,46 @@
 import { useState } from "react";
-import { useSummary } from "./api/queries";
-import { currentMonth, money } from "./lib/format";
+import { useSummary, useTrend, useBreakdown, useTransactions } from "./api/queries";
+import { currentMonth } from "./lib/format";
+import { MonthPicker } from "./components/MonthPicker";
+import { SavingsHeadline } from "./components/SavingsHeadline";
+import { MonthTotals } from "./components/MonthTotals";
+import { CategoryBreakdown } from "./components/CategoryBreakdown";
+import { TrendChart } from "./components/TrendChart";
+import { TransactionList } from "./components/TransactionList";
 
 export function App() {
-  const [month] = useState(currentMonth);
+  const [month, setMonth] = useState(currentMonth);
+
   const summary = useSummary(month);
+  const trend = useTrend(month, 12);
+  const breakdown = useBreakdown(month);
+  const transactions = useTransactions(month);
+
+  const failed = summary.isError || trend.isError || breakdown.isError || transactions.isError;
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
-      <h1 className="text-sm uppercase tracking-widest text-ink-300">Paragon</h1>
-      {summary.isLoading && <p className="mt-8 text-ink-300">Loading…</p>}
-      {summary.isError && <p className="mt-8 text-drain">Could not reach the server.</p>}
-      {summary.data && (
-        <p className="tnum mt-8 text-5xl font-semibold">
-          {summary.data.savingsRate === null ? "—" : `${summary.data.savingsRate}%`}
+      <header className="flex items-baseline justify-between">
+        <h1 className="text-sm uppercase tracking-widest text-ink-300">Paragon</h1>
+        <MonthPicker month={month} onChange={setMonth} />
+      </header>
+
+      {failed && (
+        <p className="mt-10 text-drain">
+          Could not reach the server. Start it with <code>bun run dev</code> in apps/server.
         </p>
       )}
-      {summary.data && (
-        <p className="tnum mt-2 text-ink-300">
-          {money(summary.data.keptMinor)} of {money(summary.data.incomeMinor)} PLN
-        </p>
+
+      {!failed && (
+        <div className="mt-10 space-y-8">
+          {summary.data && trend.data && (
+            <SavingsHeadline summary={summary.data} trend={trend.data} />
+          )}
+          {summary.data && <MonthTotals summary={summary.data} />}
+          {breakdown.data && <CategoryBreakdown slices={breakdown.data} />}
+          {trend.data && <TrendChart trend={trend.data} />}
+          {transactions.data && <TransactionList rows={transactions.data.rows} />}
+        </div>
       )}
     </main>
   );
