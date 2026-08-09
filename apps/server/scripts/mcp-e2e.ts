@@ -5,6 +5,9 @@
 import { spawn } from "node:child_process";
 import { unlinkSync, existsSync } from "node:fs";
 import { join } from "node:path";
+// Static: schema.ts reads no environment, so it can be imported before DB_PATH is set.
+// A computed await import() would erase its types and make every row `any`.
+import { transactions, lineItems } from "../src/db/schema";
 
 // Anchored so the script runs from anywhere.
 const SERVER_ROOT = join(import.meta.dir, "..");
@@ -119,9 +122,8 @@ const bad = await send("tools/call", {
 });
 console.log("7. lines that do not add up ->", text(bad).replace(/\n+/g, " | "));
 
-const schemaCat = await import(join(SERVER_ROOT, "src/db/schema"));
-const txs = db.select().from(schemaCat.transactions).all();
-const lines = db.select().from(schemaCat.lineItems).all();
+const txs = db.select().from(transactions).all();
+const lines = db.select().from(lineItems).all();
 console.log(`\n8. database: ${txs.length} transactions, ${lines.length} line items`);
 for (const t of txs) {
   const mine = lines.filter((l) => l.transactionId === t.id);
