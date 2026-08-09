@@ -8,9 +8,11 @@ import { CategoryBreakdown } from "./components/CategoryBreakdown";
 import { TrendChart } from "./components/TrendChart";
 import { TransactionList } from "./components/TransactionList";
 import { TransactionEditor } from "./components/TransactionEditor";
+import { CategoryTree } from "./components/CategoryTree";
 
 export function App() {
   const [month, setMonth] = useState(currentMonth);
+  const [view, setView] = useState<"dashboard" | "categories">("dashboard");
 
   const summary = useSummary(month);
   const trend = useTrend(month, 12);
@@ -22,17 +24,41 @@ export function App() {
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
       <header className="flex items-baseline justify-between">
-        <h1 className="text-sm uppercase tracking-widest text-ink-300">Paragon</h1>
-        <MonthPicker month={month} onChange={setMonth} />
+        <div className="flex items-baseline gap-5">
+          <h1 className="text-sm uppercase tracking-widest text-ink-300">Paragon</h1>
+          <nav className="flex gap-3 text-sm">
+            <button
+              type="button"
+              onClick={() => setView("dashboard")}
+              className={view === "dashboard" ? "text-ink-100" : "text-ink-300 hover:text-ink-100"}
+            >
+              Dashboard
+            </button>
+            <button
+              type="button"
+              onClick={() => setView("categories")}
+              className={view === "categories" ? "text-ink-100" : "text-ink-300 hover:text-ink-100"}
+            >
+              Categories
+            </button>
+          </nav>
+        </div>
+        {view === "dashboard" && <MonthPicker month={month} onChange={setMonth} />}
       </header>
 
-      {failed && (
+      {view === "categories" && (
+        <div className="mt-10">
+          <CategoryTree />
+        </div>
+      )}
+
+      {view === "dashboard" && failed && (
         <p className="mt-10 text-drain">
           Could not reach the server. Start it with <code>bun run dev</code> in apps/server.
         </p>
       )}
 
-      {!failed && (
+      {view === "dashboard" && !failed && (
         <div className="mt-10 space-y-8">
           {summary.data && trend.data && (
             <SavingsHeadline summary={summary.data} trend={trend.data} />
