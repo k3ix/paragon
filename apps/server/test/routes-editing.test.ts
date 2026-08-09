@@ -135,3 +135,69 @@ describe("category routes", () => {
     expect(tree.map((c: { name: string }) => c.name)).not.toContain("Gone");
   });
 });
+
+describe("POST /api/reassign", () => {
+  it("moves lines and reports the count", async () => {
+    seed();
+    addTransactions([
+      {
+        date: "2026-08-09",
+        total: "100.00",
+        merchant: "Leroy Merlin",
+        lineItems: [{ amount: "100.00", category: "Home/Cleaning" }],
+      },
+    ]);
+
+    const res = await api(
+      "/api/reassign",
+      json("POST", { fromCategory: "Home/Cleaning", toCategory: "Food/Groceries" }),
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.moved).toBe(1);
+  });
+
+  it("previews without changing anything", async () => {
+    seed();
+    addTransactions([
+      {
+        date: "2026-08-09",
+        total: "100.00",
+        merchant: "Shop",
+        lineItems: [{ amount: "100.00", category: "Home/Cleaning" }],
+      },
+    ]);
+
+    const res = await api(
+      "/api/reassign",
+      json("POST", {
+        fromCategory: "Home/Cleaning",
+        toCategory: "Food/Groceries",
+        preview: true,
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).count).toBe(1);
+
+    // Still where it was.
+    const after = await (await api("/api/breakdown?month=2026-08")).json();
+    expect(after[0].name).toBe("Home");
+  });
+
+  it("returns 422 for an empty filter", async () => {
+    seed();
+    const res = await api("/api/reassign", json("POST", { toCategory: "Food/Groceries" }));
+    expect(res.status).toBe(422);
+  });
+
+  it("returns 422 for an unknown destination", async () => {
+    seed();
+    const res = await api(
+      "/api/reassign",
+      json("POST", { fromCategory: "Home/Cleaning", toCategory: "Nope/Missing" }),
+    );
+    expect(res.status).toBe(422);
+  });
+});

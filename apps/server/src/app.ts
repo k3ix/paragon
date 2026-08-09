@@ -9,6 +9,7 @@ import { getMonthSummary, getMonthlyTrend, getCategoryBreakdown } from "./servic
 import { listTransactions } from "./services/queries";
 import { updateTransaction, deleteTransaction } from "./services/transactions";
 import { listMerchants } from "./services/merchants";
+import { reassignLineItems, previewReassign } from "./services/reassign";
 
 // Matches the shape "YYYY-MM". The month *number* is still validated in the service,
 // because 2026-13 matches this pattern but is not a month.
@@ -44,7 +45,8 @@ export const app = new Elysia({ prefix: "/api" })
       /Unknown category path/i.test(message) ||
       /already exists/i.test(message) ||
       /cycle/i.test(message) ||
-      /requires line items/i.test(message)
+      /requires line items/i.test(message) ||
+      /needs at least one filter/i.test(message)
     ) {
       set.status = 422;
     }
@@ -129,6 +131,27 @@ export const app = new Elysia({ prefix: "/api" })
 
   .delete("/categories/:id", ({ params }) => archiveCategory(Number(params.id)), {
     params: t.Object({ id: t.String() }),
-  });
+  })
+
+  .post(
+    "/reassign",
+    ({ body }) => {
+      const { toCategory, preview, ...filter } = body;
+      // Preview reports what a filter matches; the destination only appears in the
+      // message the caller composes around it.
+      return preview ? previewReassign(filter) : reassignLineItems(filter, toCategory);
+    },
+    {
+      body: t.Object({
+        toCategory: t.String({ minLength: 1 }),
+        preview: t.Optional(t.Boolean()),
+        fromCategory: t.Optional(t.String()),
+        merchant: t.Optional(t.String()),
+        month: t.Optional(t.String({ pattern: monthPattern })),
+        transactionIds: t.Optional(t.Array(t.Number())),
+        uncategorizedOnly: t.Optional(t.Boolean()),
+      }),
+    },
+  );
 
 export type App = typeof app;
