@@ -5,6 +5,7 @@
     "dev": "bun run --watch src/index.ts",
     "mcp": "bun run src/mcp/index.ts",
     "mcp:e2e": "bun run scripts/mcp-e2e.ts",
+    "backup": "bun run scripts/backup.ts",
     "db:generate": "bunx drizzle-kit generate",
     "db:migrate": "bun run src/db/migrate.ts"
   },

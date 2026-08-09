@@ -12,6 +12,7 @@ import { listMerchants } from "./services/merchants";
 import { reassignLineItems, previewReassign } from "./services/reassign";
 import { getSummary } from "./services/report";
 import { exportCsv, exportJson } from "./services/export";
+import { createBackup, pruneBackups } from "./services/backup";
 
 // Matches the shape "YYYY-MM". The month *number* is still validated in the service,
 // because 2026-13 matches this pattern but is not a month.
@@ -157,6 +158,13 @@ export const app = new Elysia({ prefix: "/api" })
 
   .delete("/categories/:id", ({ params }) => archiveCategory(Number(params.id)), {
     params: t.Object({ id: t.String() }),
+  })
+
+  .post("/backup", () => {
+    const result = createBackup();
+    // Thirty days of daily snapshots, matching the spec's retention.
+    const pruned = pruneBackups(30);
+    return { ...result, removed: pruned.removed };
   })
 
   .post(
