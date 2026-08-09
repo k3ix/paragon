@@ -9,6 +9,7 @@ import { TrendChart } from "./components/TrendChart";
 import { TransactionList } from "./components/TransactionList";
 import { TransactionEditor } from "./components/TransactionEditor";
 import { CategoryTree } from "./components/CategoryTree";
+import { DataActions } from "./components/DataActions";
 
 export function App() {
   const [month, setMonth] = useState(currentMonth);
@@ -72,6 +73,7 @@ export function App() {
               renderEditor={(row, close) => <TransactionEditor row={row} onClose={close} />}
             />
           )}
+          <DataActions month={month} />
         </div>
       )}
     </main>
