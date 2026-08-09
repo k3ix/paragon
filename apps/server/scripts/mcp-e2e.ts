@@ -171,9 +171,40 @@ const afterPin = await send("tools/call", {
 });
 console.log("13. lookup after pinning ->", text(afterPin).replace(/\n+/g, " | "));
 
+// The headline feature: split a category and watch past months follow.
+const { createCategory: mkCategory } = await import(join(SERVER_ROOT, "src/services/categories"));
+const { getCategoryBreakdown } = await import(join(SERVER_ROOT, "src/services/summary"));
+
+mkCategory({ name: "Renovation" });
+
+const fmt = (slices: { name: string; totalMinor: number }[]) =>
+  slices.map((s) => `${s.name} ${s.totalMinor}`).join(", ");
+
+console.log("14. breakdown before:", fmt(getCategoryBreakdown("2026-08")));
+
+const previewMove = await send("tools/call", {
+  name: "reassign_line_items",
+  arguments: { fromCategory: "Home/Cleaning", toCategory: "Renovation", preview: true },
+});
+console.log("15. preview ->", text(previewMove).replace(/\n+/g, " | "));
+
+const applyMove = await send("tools/call", {
+  name: "reassign_line_items",
+  arguments: { fromCategory: "Home/Cleaning", toCategory: "Renovation" },
+});
+console.log("16. apply ->", text(applyMove).replace(/\n+/g, " | "));
+
+console.log("17. breakdown after: ", fmt(getCategoryBreakdown("2026-08")));
+
+const emptyFilter = await send("tools/call", {
+  name: "reassign_line_items",
+  arguments: { toCategory: "Renovation" },
+});
+console.log("18. empty filter refused ->", text(emptyFilter).replace(/\n+/g, " | "));
+
 const txs = db.select().from(transactions).all();
 const lines = db.select().from(lineItems).all();
-console.log(`\n14. database: ${txs.length} transactions, ${lines.length} line items`);
+console.log(`\n19. database: ${txs.length} transactions, ${lines.length} line items`);
 for (const t of txs) {
   const mine = lines.filter((l) => l.transactionId === t.id);
   const sum = mine.reduce((a, l) => a + l.amountMinor, 0);
