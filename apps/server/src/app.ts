@@ -11,6 +11,7 @@ import { updateTransaction, deleteTransaction } from "./services/transactions";
 import { listMerchants } from "./services/merchants";
 import { reassignLineItems, previewReassign } from "./services/reassign";
 import { getSummary } from "./services/report";
+import { exportCsv, exportJson } from "./services/export";
 
 // Matches the shape "YYYY-MM". The month *number* is still validated in the service,
 // because 2026-13 matches this pattern but is not a month.
@@ -88,6 +89,28 @@ export const app = new Elysia({ prefix: "/api" })
   .get("/merchants", () => listMerchants())
 
   .get("/report", ({ query }) => getSummary(query.month), { query: monthQuery })
+
+  .get(
+    "/export.csv",
+    ({ query, set }) => {
+      set.headers["content-type"] = "text/csv; charset=utf-8";
+      set.headers["content-disposition"] =
+        `attachment; filename="paragon-${query.month ?? "all"}.csv"`;
+      return exportCsv({ month: query.month });
+    },
+    { query: t.Object({ month: t.Optional(t.String({ pattern: monthPattern })) }) },
+  )
+
+  .get(
+    "/export.json",
+    ({ query, set }) => {
+      set.headers["content-type"] = "application/json; charset=utf-8";
+      set.headers["content-disposition"] =
+        `attachment; filename="paragon-${query.month ?? "all"}.json"`;
+      return exportJson({ month: query.month });
+    },
+    { query: t.Object({ month: t.Optional(t.String({ pattern: monthPattern })) }) },
+  )
 
   .patch("/transactions/:id", ({ params, body }) => updateTransaction(Number(params.id), body), {
     params: t.Object({ id: t.String() }),
