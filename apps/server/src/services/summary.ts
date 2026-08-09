@@ -2,41 +2,9 @@ import { and, eq, gte, lt, sql } from "drizzle-orm";
 import type { MonthSummary, TrendPoint, CategorySlice } from "@paragon/shared";
 import { db } from "../db";
 import { transactions, lineItems, categories } from "../db/schema";
+import { monthBounds, shiftMonth } from "./month";
 
 export type { MonthSummary, TrendPoint, CategorySlice };
-
-/**
- * Parses "YYYY-MM" into its year and month number.
- *
- * The range check is not decoration: Date.UTC rolls month 13 over into January of
- * the next year, so "2026-13" would silently return a different month's figures
- * rather than failing. The value arrives from a query string.
- */
-function parseMonth(month: string): { year: number; m: number } {
-  const match = /^(\d{4})-(\d{2})$/.exec(month.trim());
-  if (!match) throw new Error(`Invalid month, expected YYYY-MM: ${month}`);
-  const year = Number(match[1]);
-  const m = Number(match[2]);
-  if (m < 1 || m > 12) throw new Error(`Invalid month number, expected 01-12: ${month}`);
-  return { year, m };
-}
-
-/** Unix-second bounds of a "YYYY-MM" month, half-open: [start, end). */
-function monthBounds(month: string): { start: number; end: number } {
-  const { year, m } = parseMonth(month);
-  const start = Math.floor(Date.UTC(year, m - 1, 1) / 1000);
-  const end = Math.floor(Date.UTC(m === 12 ? year + 1 : year, m === 12 ? 0 : m, 1) / 1000);
-  return { start, end };
-}
-
-/** Shifts "YYYY-MM" by a signed number of months. */
-function shiftMonth(month: string, delta: number): string {
-  const { year, m } = parseMonth(month);
-  const total = year * 12 + (m - 1) + delta;
-  const shiftedYear = Math.floor(total / 12);
-  const shiftedMonth = (total % 12) + 1;
-  return `${shiftedYear}-${String(shiftedMonth).padStart(2, "0")}`;
-}
 
 /** Sum of transaction totals of one type within a month. Transfers are never counted. */
 function totalOfType(start: number, end: number, type: "expense" | "income"): number {
