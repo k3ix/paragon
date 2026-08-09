@@ -545,8 +545,13 @@ Huntly's tests wipe tables in the live `huntly.db`. This helper exists so that n
 
 - [ ] **Step 8: Verify the helper builds a clean database**
 
-Run: `cd apps/server && bun test test/helpers/db.ts`
-Expected: no tests found, but no errors — the file imports and migrates cleanly. Confirm `paragon.test.db` was created.
+`bun test` only picks up files containing `.test` in the name, so import the helper directly:
+
+```bash
+cd apps/server && bun -e 'const h = await import("./test/helpers/db"); h.resetTestDb(); console.log("helper OK");'
+```
+
+Expected: prints `helper OK` and creates `paragon.test.db`.
 
 - [ ] **Step 9: Commit**
 

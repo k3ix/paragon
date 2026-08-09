@@ -4,6 +4,9 @@
   "workspaces": {
     "": {
       "name": "paragon",
+      "devDependencies": {
+        "@types/bun": "^1.3.14",
+      },
     },
     "apps/server": {
       "name": "@paragon/server",
