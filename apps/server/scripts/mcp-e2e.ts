@@ -109,6 +109,23 @@ const noBreakdown = await send("tools/call", {
 });
 console.log("6. push notification, no breakdown ->", text(noBreakdown).replace(/\n+/g, " | "));
 
+// Step 6 teaches nothing (no category), so file one categorized purchase for the
+// memory to remember.
+const categorized = await send("tools/call", {
+  name: "add_transactions",
+  arguments: {
+    items: [
+      {
+        date: "2026-08-12",
+        total: "19.90",
+        merchant: "Żabka",
+        lineItems: [{ amount: "19.90", category: "Food/Groceries" }],
+      },
+    ],
+  },
+});
+console.log("7. categorized Żabka purchase ->", text(categorized).replace(/\n+/g, " | "));
+
 const bad = await send("tools/call", {
   name: "add_transactions",
   arguments: {
@@ -122,11 +139,41 @@ const bad = await send("tools/call", {
     ],
   },
 });
-console.log("7. lines that do not add up ->", text(bad).replace(/\n+/g, " | "));
+console.log("8. lines that do not add up ->", text(bad).replace(/\n+/g, " | "));
+
+const known = await send("tools/call", {
+  name: "get_merchant",
+  arguments: { name: "Żabka" },
+});
+console.log("9. get_merchant after one filing ->", text(known).replace(/\n+/g, " | "));
+
+const unknown = await send("tools/call", {
+  name: "get_merchant",
+  arguments: { name: "Lidl" },
+});
+console.log("10. get_merchant for a new shop ->", text(unknown).replace(/\n+/g, " | "));
+
+const bankSpelling = await send("tools/call", {
+  name: "get_merchant",
+  arguments: { name: "ZABKA" },
+});
+console.log("11. same shop, bank spelling ->", text(bankSpelling).replace(/\n+/g, " | "));
+
+const pin = await send("tools/call", {
+  name: "set_merchant_category",
+  arguments: { name: "Żabka", category: "Home/Cleaning" },
+});
+console.log("12. pin to another category ->", text(pin).replace(/\n+/g, " | "));
+
+const afterPin = await send("tools/call", {
+  name: "get_merchant",
+  arguments: { name: "Żabka" },
+});
+console.log("13. lookup after pinning ->", text(afterPin).replace(/\n+/g, " | "));
 
 const txs = db.select().from(transactions).all();
 const lines = db.select().from(lineItems).all();
-console.log(`\n8. database: ${txs.length} transactions, ${lines.length} line items`);
+console.log(`\n14. database: ${txs.length} transactions, ${lines.length} line items`);
 for (const t of txs) {
   const mine = lines.filter((l) => l.transactionId === t.id);
   const sum = mine.reduce((a, l) => a + l.amountMinor, 0);
