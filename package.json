@@ -1,0 +1,8 @@
+{
+  "name": "paragon",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "test": "bun test"
+  }
+}

@@ -146,7 +146,19 @@ export * from "./enums";
 - [ ] **Step 6: Install and verify resolution**
 
 Run: `bun install`
-Expected: completes without error, `node_modules/@paragon/shared` exists as a workspace link.
+Expected: completes without error.
+
+Then verify the import actually resolves, from inside a workspace that depends on it:
+
+```bash
+cd apps/server && bun -e 'import { TRANSACTION_TYPES } from "@paragon/shared"; console.log(TRANSACTION_TYPES);'
+```
+
+Expected: prints `[ "expense", "income", "transfer" ]`.
+
+Note: Bun 1.3 resolves workspace packages through `bun.lock` and does **not** create a
+`node_modules/@paragon/` directory. Its absence is normal — do not add Huntly's `postinstall`
+symlink. Only the import check above proves resolution works.
 
 - [ ] **Step 7: Commit**
 
