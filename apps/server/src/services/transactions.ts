@@ -20,8 +20,20 @@ function parseDate(date: string): number {
   return Math.floor(Date.UTC(Number(y), Number(m) - 1, Number(d)) / 1000);
 }
 
-/** Finds or creates the merchant row and bumps its sighting counter. */
-function upsertMerchant(nameNorm: string, occurredOn: number): number {
+/**
+ * Finds or creates the merchant row, bumps its sighting counter, and records the
+ * category to default to next time.
+ *
+ * `learnCategoryId` is the category of a single-category transaction, or null when
+ * the receipt was split — a mixed basket teaches nothing about where the shop belongs.
+ * The most recent single-category filing wins rather than the most frequent, so a
+ * deliberate correction takes effect at once instead of being outvoted by history.
+ */
+function upsertMerchant(
+  nameNorm: string,
+  occurredOn: number,
+  learnCategoryId: number | null,
+): number {
   const existing = db.select().from(merchants).where(eq(merchants.nameNorm, nameNorm)).get();
 
   if (existing) {
@@ -29,6 +41,8 @@ function upsertMerchant(nameNorm: string, occurredOn: number): number {
       .set({
         seenCount: existing.seenCount + 1,
         lastSeenAt: Math.max(existing.lastSeenAt ?? 0, occurredOn),
+        // Keep the previous default when this receipt teaches nothing.
+        defaultCategoryId: learnCategoryId ?? existing.defaultCategoryId,
       })
       .where(eq(merchants.id, existing.id))
       .run();
@@ -37,7 +51,12 @@ function upsertMerchant(nameNorm: string, occurredOn: number): number {
 
   return db
     .insert(merchants)
-    .values({ nameNorm, seenCount: 1, lastSeenAt: occurredOn })
+    .values({
+      nameNorm,
+      seenCount: 1,
+      lastSeenAt: occurredOn,
+      defaultCategoryId: learnCategoryId,
+    })
     .returning({ id: merchants.id })
     .get().id;
 }
@@ -101,8 +120,14 @@ function addOne(item: AddTransactionInput): AddResult {
   // transaction row behind.
   return db.transaction((tx) => {
     // Transfers are movements between own accounts and have no merchant.
+    // A single line with a category is an unambiguous filing; anything else is not.
+    const learnCategoryId =
+      resolved.length === 1 && resolved[0]!.categoryId !== null ? resolved[0]!.categoryId : null;
+
     const merchantId =
-      merchantNorm && item.type !== "transfer" ? upsertMerchant(merchantNorm, occurredOn) : null;
+      merchantNorm && item.type !== "transfer"
+        ? upsertMerchant(merchantNorm, occurredOn, learnCategoryId)
+        : null;
 
     const inserted = tx
       .insert(transactions)

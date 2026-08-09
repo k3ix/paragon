@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach } from "bun:test";
 import { resetTestDb, db, schema } from "./helpers/db";
 import { addTransactions } from "../src/services/transactions";
-import { createCategory } from "../src/services/categories";
+import { createCategory, findCategoryByPath } from "../src/services/categories";
 
 beforeEach(() => {
   resetTestDb();
@@ -309,5 +309,97 @@ describe("addTransactions", () => {
     const tx = db.select().from(schema.transactions).all()[0]!;
     expect(tx.type).toBe("transfer");
     expect(db.select().from(schema.merchants).all()).toHaveLength(0);
+  });
+
+  it("learns the default category from a single-category transaction", () => {
+    const { groceries } = seedCategories();
+    addTransactions([
+      {
+        date: "2026-08-09",
+        total: "23.50",
+        merchant: "Żabka",
+        lineItems: [{ amount: "23.50", category: "Food/Groceries" }],
+      },
+    ]);
+
+    const merchant = db.select().from(schema.merchants).all()[0]!;
+    expect(merchant.defaultCategoryId).toBe(groceries.id);
+  });
+
+  it("learns nothing from a receipt split across categories", () => {
+    seedCategories();
+    addTransactions([
+      {
+        date: "2026-08-09",
+        total: "184.20",
+        merchant: "Biedronka",
+        lineItems: [
+          { amount: "124.30", category: "Food/Groceries" },
+          { amount: "38.00", category: "Home/Cleaning" },
+          { amount: "21.90", category: "Food/Groceries" },
+        ],
+      },
+    ]);
+
+    const merchant = db.select().from(schema.merchants).all()[0]!;
+    expect(merchant.defaultCategoryId).toBeNull();
+  });
+
+  it("keeps an existing default when a later receipt is split", () => {
+    const { groceries } = seedCategories();
+    addTransactions([
+      {
+        date: "2026-08-09",
+        total: "23.50",
+        merchant: "Biedronka",
+        lineItems: [{ amount: "23.50", category: "Food/Groceries" }],
+      },
+    ]);
+    addTransactions([
+      {
+        date: "2026-08-10",
+        total: "184.20",
+        merchant: "Biedronka",
+        lineItems: [
+          { amount: "146.20", category: "Food/Groceries" },
+          { amount: "38.00", category: "Home/Cleaning" },
+        ],
+      },
+    ]);
+
+    const merchant = db.select().from(schema.merchants).all()[0]!;
+    expect(merchant.defaultCategoryId).toBe(groceries.id);
+  });
+
+  it("moves the default when the merchant is filed elsewhere later", () => {
+    seedCategories();
+    const cleaning = findCategoryByPath("Home/Cleaning")!;
+    addTransactions([
+      {
+        date: "2026-08-09",
+        total: "23.50",
+        merchant: "Rossmann",
+        lineItems: [{ amount: "23.50", category: "Food/Groceries" }],
+      },
+    ]);
+    addTransactions([
+      {
+        date: "2026-08-10",
+        total: "31.00",
+        merchant: "Rossmann",
+        lineItems: [{ amount: "31.00", category: "Home/Cleaning" }],
+      },
+    ]);
+
+    const merchant = db.select().from(schema.merchants).all()[0]!;
+    expect(merchant.defaultCategoryId).toBe(cleaning);
+  });
+
+  it("learns nothing from an uncategorized line", () => {
+    seedCategories();
+    addTransactions([{ date: "2026-08-09", total: "23.50", merchant: "Żabka" }]);
+
+    const merchant = db.select().from(schema.merchants).all()[0]!;
+    expect(merchant.defaultCategoryId).toBeNull();
   });
 });
