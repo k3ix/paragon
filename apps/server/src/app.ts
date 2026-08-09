@@ -1,7 +1,13 @@
 import { Elysia, t } from "elysia";
-import { listCategories } from "./services/categories";
+import {
+  listCategories,
+  createCategory,
+  updateCategory,
+  archiveCategory,
+} from "./services/categories";
 import { getMonthSummary, getMonthlyTrend, getCategoryBreakdown } from "./services/summary";
 import { listTransactions } from "./services/queries";
+import { updateTransaction, deleteTransaction } from "./services/transactions";
 import { listMerchants } from "./services/merchants";
 
 // Matches the shape "YYYY-MM". The month *number* is still validated in the service,
@@ -24,7 +30,22 @@ export const app = new Elysia({ prefix: "/api" })
       return;
     }
     const message = error instanceof Error ? error.message : String(error);
-    if (/^Invalid month/i.test(message)) {
+
+    // "not found" is the caller naming a row that is gone; everything else the services
+    // throw is the caller sending something invalid. A 500 here would read as "the
+    // server is broken" when the request simply cannot be honoured.
+    if (/not found/i.test(message)) {
+      set.status = 404;
+      return;
+    }
+    if (
+      /^Invalid month/i.test(message) ||
+      /does not match/i.test(message) ||
+      /Unknown category path/i.test(message) ||
+      /already exists/i.test(message) ||
+      /cycle/i.test(message) ||
+      /requires line items/i.test(message)
+    ) {
       set.status = 422;
     }
   })
@@ -61,6 +82,53 @@ export const app = new Elysia({ prefix: "/api" })
     },
   )
 
-  .get("/merchants", () => listMerchants());
+  .get("/merchants", () => listMerchants())
+
+  .patch("/transactions/:id", ({ params, body }) => updateTransaction(Number(params.id), body), {
+    params: t.Object({ id: t.String() }),
+    body: t.Object({
+      date: t.Optional(t.String()),
+      total: t.Optional(t.Union([t.String(), t.Number()])),
+      type: t.Optional(
+        t.Union([t.Literal("expense"), t.Literal("income"), t.Literal("transfer")]),
+      ),
+      merchant: t.Optional(t.Union([t.String(), t.Null()])),
+      note: t.Optional(t.Union([t.String(), t.Null()])),
+      lineItems: t.Optional(
+        t.Array(
+          t.Object({
+            amount: t.Union([t.String(), t.Number()]),
+            category: t.Optional(t.String()),
+            note: t.Optional(t.String()),
+          }),
+        ),
+      ),
+    }),
+  })
+
+  .delete("/transactions/:id", ({ params }) => deleteTransaction(Number(params.id)), {
+    params: t.Object({ id: t.String() }),
+  })
+
+  .post("/categories", ({ body }) => createCategory(body), {
+    body: t.Object({
+      name: t.String({ minLength: 1 }),
+      parentId: t.Optional(t.Union([t.Number(), t.Null()])),
+      isFixed: t.Optional(t.Boolean()),
+    }),
+  })
+
+  .patch("/categories/:id", ({ params, body }) => updateCategory(Number(params.id), body), {
+    params: t.Object({ id: t.String() }),
+    body: t.Object({
+      name: t.Optional(t.String({ minLength: 1 })),
+      parentId: t.Optional(t.Union([t.Number(), t.Null()])),
+      isFixed: t.Optional(t.Boolean()),
+    }),
+  })
+
+  .delete("/categories/:id", ({ params }) => archiveCategory(Number(params.id)), {
+    params: t.Object({ id: t.String() }),
+  });
 
 export type App = typeof app;
