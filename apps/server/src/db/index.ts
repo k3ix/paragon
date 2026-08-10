@@ -9,6 +9,17 @@ import * as schema from "./schema";
 // Tests point DB_PATH at a scratch file. Never let a test touch the real data.
 const dbPath = process.env.DB_PATH ?? join(import.meta.dir, "..", "..", "paragon.db");
 
+// A test that forgets to import test/helpers/db opens the real database and its
+// beforeEach wipes real data. That has happened, and it destroyed a month of
+// hand-entered receipts, so the check is here rather than in the helper: this module
+// is the one thing every path to the data has in common.
+if (process.env.NODE_ENV === "test" && !process.env.DB_PATH) {
+  throw new Error(
+    "Refusing to open the live database from a test. " +
+      'Import "./helpers/db" (which sets DB_PATH) before anything that touches src/db.',
+  );
+}
+
 const sqlite = new Database(dbPath);
 // ponytail: Database.exec is flagged deprecated in Bun 1.3 types but is still the
 // documented way to issue PRAGMAs; switch to the replacement once one is published.

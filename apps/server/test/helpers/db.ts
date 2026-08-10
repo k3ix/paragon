@@ -30,6 +30,7 @@ export function resetTestDb() {
   db.delete(schema.lineItems).run();
   db.delete(schema.transactions).run();
   db.delete(schema.merchants).run();
+  db.delete(schema.commitments).run();
   db.delete(schema.categories).run();
   sqlite.exec("PRAGMA foreign_keys = ON;");
 }
