@@ -1,0 +1,1 @@
+ALTER TABLE `categories` ADD `is_occasional` integer DEFAULT false NOT NULL;

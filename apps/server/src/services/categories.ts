@@ -10,6 +10,7 @@ export function createCategory(input: {
   name: string;
   parentId?: number | null;
   isFixed?: boolean;
+  isOccasional?: boolean;
 }): { id: number; name: string } {
   const row = db
     .insert(categories)
@@ -17,6 +18,7 @@ export function createCategory(input: {
       name: input.name,
       parentId: input.parentId ?? null,
       isFixed: input.isFixed ?? false,
+      isOccasional: input.isOccasional ?? false,
     })
     .returning({ id: categories.id, name: categories.name })
     .get();
@@ -31,6 +33,7 @@ export function listCategories(): CategoryNode[] {
       name: categories.name,
       parentId: categories.parentId,
       isFixed: categories.isFixed,
+      isOccasional: categories.isOccasional,
     })
     .from(categories)
     .where(isNull(categories.archivedAt))
@@ -38,7 +41,13 @@ export function listCategories(): CategoryNode[] {
 
   const byId = new Map<number, CategoryNode>();
   for (const row of rows) {
-    byId.set(row.id, { id: row.id, name: row.name, isFixed: row.isFixed, children: [] });
+    byId.set(row.id, {
+      id: row.id,
+      name: row.name,
+      isFixed: row.isFixed,
+      isOccasional: row.isOccasional,
+      children: [],
+    });
   }
 
   const roots: CategoryNode[] = [];
@@ -109,7 +118,12 @@ function wouldCreateCycle(id: number, candidateParent: number): boolean {
 
 export function updateCategory(
   id: number,
-  patch: { name?: string; parentId?: number | null; isFixed?: boolean },
+  patch: {
+    name?: string;
+    parentId?: number | null;
+    isFixed?: boolean;
+    isOccasional?: boolean;
+  },
 ): { id: number; name: string } {
   const existing = db.select().from(categories).where(eq(categories.id, id)).get();
   if (!existing) throw new Error(`Category not found: ${id}`);
@@ -128,6 +142,7 @@ export function updateCategory(
       name: patch.name ?? existing.name,
       parentId: patch.parentId === undefined ? existing.parentId : patch.parentId,
       isFixed: patch.isFixed ?? existing.isFixed,
+      isOccasional: patch.isOccasional ?? existing.isOccasional,
     })
     .where(eq(categories.id, id))
     .run();

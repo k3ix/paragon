@@ -43,6 +43,9 @@ export type CategoryTreeNode = {
 export type CategoryNode = {
   id: number;
   name: string;
+  /** Recurs monthly at a steady amount: rent, utilities. */
   isFixed: boolean;
+  /** Occasional and lumpy: a holiday, a laptop. Kept out of the living-cost average. */
+  isOccasional: boolean;
   children: CategoryNode[];
 };

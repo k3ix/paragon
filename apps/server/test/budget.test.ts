@@ -134,6 +134,35 @@ describe("budget", () => {
     expect(getBudget("2026-08").flexibleAverageMinor).toBe(50000);
   });
 
+  it("keeps an occasional category out of the average", () => {
+    baseIncome();
+    createCategory({ name: "Еда" });
+    // A holiday is lumpy and occasional: averaging it in would raise the living-cost
+    // figure for three months after every trip.
+    createCategory({ name: "Путешествия", isOccasional: true });
+
+    for (const month of ["2026-05", "2026-06", "2026-07"]) {
+      expense(month, "1000.00", "Еда");
+    }
+    expense("2026-06", "5000.00", "Путешествия");
+
+    expect(getBudget("2026-08").flexibleAverageMinor).toBe(100000);
+  });
+
+  it("carries the occasional mark down to subcategories", () => {
+    baseIncome();
+    createCategory({ name: "Еда" });
+    const travel = createCategory({ name: "Путешествия", isOccasional: true });
+    createCategory({ name: "Жильё", parentId: travel.id });
+
+    for (const month of ["2026-05", "2026-06", "2026-07"]) {
+      expense(month, "1000.00", "Еда");
+    }
+    expense("2026-06", "5000.00", "Путешествия/Жильё");
+
+    expect(getBudget("2026-08").flexibleAverageMinor).toBe(100000);
+  });
+
   it("uses the three most recent months, not the oldest three", () => {
     baseIncome();
     createCategory({ name: "Еда" });

@@ -239,6 +239,7 @@ export function useUpdateCategory() {
       name?: string;
       parentId?: number | null;
       isFixed?: boolean;
+      isOccasional?: boolean;
     }) => {
       const { id, ...patch } = input;
       const { data, error } = await client.api.categories({ id: String(id) }).patch(patch);

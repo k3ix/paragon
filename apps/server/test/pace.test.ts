@@ -1,6 +1,8 @@
 import { describe, expect, it, beforeEach } from "bun:test";
 import { resetTestDb } from "./helpers/db";
 import { addTransactions } from "../src/services/transactions";
+import { createCategory } from "../src/services/categories";
+import { createCommitment } from "../src/services/commitments";
 import { getPace } from "../src/services/pace";
 
 beforeEach(() => {
@@ -10,6 +12,17 @@ beforeEach(() => {
 function expense(day: number, total: string) {
   addTransactions([
     { date: `2026-08-${String(day).padStart(2, "0")}`, total, merchant: `Shop ${day} ${total}` },
+  ]);
+}
+
+function categorised(day: number, total: string, category: string) {
+  addTransactions([
+    {
+      date: `2026-08-${String(day).padStart(2, "0")}`,
+      total,
+      merchant: `Shop ${day} ${total} ${category}`,
+      lineItems: [{ amount: total, category }],
+    },
   ]);
 }
 
@@ -68,6 +81,51 @@ describe("pace", () => {
 
   it("has no budget to compare against until history exists", () => {
     expect(getPace("2026-08", august(9)).budgetMinor).toBeNull();
+  });
+
+  it("splits the total into committed, occasional and living", () => {
+    createCategory({ name: "Путешествия", isOccasional: true });
+    const rentCategory = createCategory({ name: "Аренда" });
+    createCategory({ name: "Еда" });
+    createCommitment({
+      kind: "expense",
+      name: "Аренда",
+      amountMinor: 400000,
+      categoryId: rentCategory.id,
+      activeFrom: "2026-01",
+    });
+
+    categorised(1, "4000.00", "Аренда");
+    categorised(2, "3000.00", "Путешествия");
+    categorised(3, "500.00", "Еда");
+
+    const pace = getPace("2026-08", august(9));
+
+    expect(pace.spentMinor).toBe(750000);
+    expect(pace.committedMinor).toBe(400000);
+    expect(pace.occasionalMinor).toBe(300000);
+    expect(pace.livingMinor).toBe(50000);
+    // The three parts account for every zloty of the total.
+    expect(pace.committedMinor + pace.occasionalMinor + pace.livingMinor).toBe(pace.spentMinor);
+  });
+
+  it("measures the daily rate against living costs, not the total", () => {
+    createCategory({ name: "Путешествия", isOccasional: true });
+    createCategory({ name: "Еда" });
+    categorised(1, "3000.00", "Путешествия");
+    categorised(2, "900.00", "Еда");
+
+    // 900.00 of ordinary spending over nine days, not 3900.00.
+    expect(getPace("2026-08", august(9)).perDayMinor).toBe(10000);
+  });
+
+  it("counts a line in no bucket as living cost", () => {
+    expense(1, "300.00");
+
+    const pace = getPace("2026-08", august(9));
+
+    expect(pace.livingMinor).toBe(30000);
+    expect(pace.occasionalMinor).toBe(0);
   });
 
   it("refuses an impossible month", () => {

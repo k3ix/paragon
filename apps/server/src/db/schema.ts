@@ -10,8 +10,14 @@ export const categories = sqliteTable(
       onDelete: "restrict",
     }),
     name: text("name").notNull(),
-    // Default fixed/discretionary classification. Lines may override it.
+    // Recurs every month at a steady amount: rent, utilities, subscriptions.
+    // Lines may override it.
     isFixed: integer("is_fixed", { mode: "boolean" }).notNull().default(false),
+    // Occasional and lumpy: a holiday, a laptop. Kept out of the living-cost average
+    // because averaging a trip in would raise it for three months afterwards and
+    // shrink the payday figure to match. Distinct from isFixed, which is about
+    // predictability rather than rarity — rent is fixed but not occasional.
+    isOccasional: integer("is_occasional", { mode: "boolean" }).notNull().default(false),
     // Archived categories vanish from pickers but stay in past reports.
     archivedAt: integer("archived_at"),
     createdAt: integer("created_at").notNull().default(sql`(unixepoch())`),

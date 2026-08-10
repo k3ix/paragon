@@ -61,18 +61,35 @@ export function CategoryTree() {
                       постоянная
                     </span>
                   )}
+                  {node.isOccasional && (
+                    <span className="ml-2 rounded bg-ink-800 px-1.5 py-0.5 text-xs text-ink-300">
+                      разовая
+                    </span>
+                  )}
                 </>
               )}
             </span>
 
+            {/*
+             * One control rather than two checkboxes: a category is one of these three
+             * things, and the two flags are mutually exclusive in practice. Rent is
+             * predictable every month; a holiday is neither predictable nor monthly.
+             */}
             <select
-              value={node.isFixed ? "fixed" : "flexible"}
-              onChange={(e) => update.mutate({ id: node.id, isFixed: e.target.value === "fixed" })}
+              value={node.isOccasional ? "occasional" : node.isFixed ? "fixed" : "flexible"}
+              onChange={(e) =>
+                update.mutate({
+                  id: node.id,
+                  isFixed: e.target.value === "fixed",
+                  isOccasional: e.target.value === "occasional",
+                })
+              }
               aria-label={`Тип категории ${node.name}`}
               className="rounded border border-ink-700 bg-ink-800 px-2 py-1 text-xs text-ink-300"
             >
-              <option value="flexible">гибкая</option>
-              <option value="fixed">постоянная</option>
+              <option value="flexible">каждый месяц</option>
+              <option value="fixed">постоянная сумма</option>
+              <option value="occasional">разовая</option>
             </select>
 
             <button

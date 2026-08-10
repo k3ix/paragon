@@ -206,6 +206,7 @@ export const app = new Elysia({ prefix: "/api" })
       name: t.String({ minLength: 1 }),
       parentId: t.Optional(t.Union([t.Number(), t.Null()])),
       isFixed: t.Optional(t.Boolean()),
+      isOccasional: t.Optional(t.Boolean()),
     }),
   })
 
@@ -215,6 +216,7 @@ export const app = new Elysia({ prefix: "/api" })
       name: t.Optional(t.String({ minLength: 1 })),
       parentId: t.Optional(t.Union([t.Number(), t.Null()])),
       isFixed: t.Optional(t.Boolean()),
+      isOccasional: t.Optional(t.Boolean()),
     }),
   })
 
