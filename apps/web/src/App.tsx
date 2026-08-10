@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useTransactions } from "./api/queries";
+import { useTransactions, usePeriods, usePeriodSummary, useBudget } from "./api/queries";
 import { currentMonth } from "./lib/format";
-import { MonthPicker } from "./components/MonthPicker";
+import { PeriodPicker } from "./components/PeriodPicker";
 import { Savings } from "./components/Savings";
 import { SetAside } from "./components/SetAside";
 import { MonthPace } from "./components/MonthPace";
@@ -12,11 +12,26 @@ import { CategoryTree } from "./components/CategoryTree";
 import { CommitmentsEditor } from "./components/CommitmentsEditor";
 import { DataActions } from "./components/DataActions";
 
+/** "2026-08" from a period id, which is either that or "2026-08-10". */
+function monthOf(period: string): string {
+  return period.startsWith("pay-") ? period.slice(4, 11) : period;
+}
+
 export function App() {
-  const [month, setMonth] = useState(currentMonth);
+  const [period, setPeriod] = useState<string | null>(null);
   const [view, setView] = useState<"dashboard" | "settings">("dashboard");
   const [filter, setFilter] = useState<{ path: string; name: string } | null>(null);
 
+  const periods = usePeriods();
+
+  // Defaults to the current pay period once one exists, since that is the window the
+  // money actually moves in. Falls back to the calendar month before any salary is
+  // recorded, and after an explicit switch.
+  const active: string = period ?? periods.data?.[0]?.id ?? currentMonth();
+  const month = monthOf(active);
+
+  const summary = usePeriodSummary(active);
+  const budget = useBudget(month);
   const transactions = useTransactions(month);
 
   return (
@@ -30,7 +45,7 @@ export function App() {
               onClick={() => setView("dashboard")}
               className={view === "dashboard" ? "text-ink-100" : "text-ink-300 hover:text-ink-100"}
             >
-              Месяц
+              Деньги
             </button>
             <button
               type="button"
@@ -41,7 +56,9 @@ export function App() {
             </button>
           </nav>
         </div>
-        {view === "dashboard" && <MonthPicker month={month} onChange={setMonth} />}
+        {view === "dashboard" && (
+          <PeriodPicker period={active} periods={periods.data ?? []} onChange={setPeriod} />
+        )}
       </header>
 
       {view === "settings" && (
@@ -61,9 +78,11 @@ export function App() {
         <div className="mt-10 space-y-12">
           {/* What actually went into savings comes before what the plan says should:
               the fact is the outcome being optimised, the plan is advice about it. */}
-          <Savings month={month} />
+          {summary.data && <Savings summary={summary.data} />}
           <SetAside month={month} />
-          <MonthPace month={month} />
+          {summary.data && (
+            <MonthPace summary={summary.data} budgetMinor={budget.data?.flexibleAverageMinor ?? null} />
+          )}
           <SpendingTree
             month={month}
             selectedPath={filter?.path ?? null}

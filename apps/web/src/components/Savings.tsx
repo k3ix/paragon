@@ -1,25 +1,26 @@
-import { useSavings, useRunway } from "../api/queries";
 import { money } from "../lib/format";
 
+type Summary = {
+  incomeMinor: number;
+  savedMinor: number;
+  spentMinor: number;
+  leftMinor: number;
+  daysRemaining: number;
+  perDayLeftMinor: number | null;
+};
+
 /**
- * What was actually put away this month, and what is left to live on.
+ * What was put away this period, and what is left to live on.
  *
- * The point of the whole app: money moved to savings on payday, before spending, is
- * the thing being optimised. It cannot be read off a spending total — transfers are
- * not expenses — so it gets its own block above everything else.
+ * Deliberately just the amount: balances, interest and returns live in the broker's
+ * app and the bank's, which do that properly. The only thing this needs to answer is
+ * "how much did we manage to move out" — the outcome the whole app exists to improve.
  */
-export function Savings({ month }: { month: string }) {
-  const savings = useSavings(month);
-  const runway = useRunway(month);
+export function Savings({ summary }: { summary: Summary }) {
+  const s = summary;
+  if (s.incomeMinor === 0 && s.savedMinor === 0) return null;
 
-  if (!savings.data || !runway.data) return null;
-  const s = savings.data;
-  const r = runway.data;
-
-  if (s.savedMinor === 0 && r.incomeMinor === 0) return null;
-
-  const peak = Math.max(...s.history.map((h) => h.savedMinor), 1);
-  const delta = s.savedMinor - s.previousMinor;
+  const rate = s.incomeMinor > 0 ? Math.round((s.savedMinor / s.incomeMinor) * 100) : null;
 
   return (
     <section>
@@ -29,65 +30,23 @@ export function Savings({ month }: { month: string }) {
         <span className="text-5xl leading-none font-semibold whitespace-nowrap text-gain sm:text-6xl">
           {money(s.savedMinor)} zł
         </span>
-        {s.rate !== null && (
-          <span className="text-sm text-ink-300">{s.rate}% от дохода</span>
-        )}
+        {rate !== null && <span className="text-sm text-ink-300">{rate}% от зарплаты</span>}
       </p>
 
-      {s.previousMinor > 0 && delta !== 0 && (
-        <p className="tnum mt-2 text-sm text-ink-300">
-          <span className={delta > 0 ? "text-gain" : "text-drain"}>
-            {delta > 0 ? "+" : "−"}
-            {money(Math.abs(delta))}
-          </span>{" "}
-          к прошлому месяцу
-        </p>
-      )}
-
-      {s.destinations.length > 0 && (
-        <ul className="mt-5 max-w-sm space-y-1.5 text-sm">
-          {s.destinations.map((destination) => (
-            <li
-              key={destination.label}
-              className="flex items-baseline justify-between gap-4 border-b border-ink-800 pb-1.5 last:border-0"
-            >
-              <span className="text-ink-300">{destination.label}</span>
-              <span className="tnum whitespace-nowrap tabular-nums">
-                {money(destination.amountMinor)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {/* Income minus savings minus spending: the figure the household actually
-          operates on once it has paid itself first. */}
-      <dl className="mt-6 max-w-sm space-y-2 border-t border-ink-700 pt-4 text-sm">
-        <Row label="Пришло" value={money(r.incomeMinor)} />
-        <Row label="Отложено" value={`−${money(r.savedMinor)}`} />
-        <Row label="Потрачено" value={`−${money(r.spentMinor)}`} />
+      <dl className="mt-6 max-w-sm space-y-2 text-sm">
+        <Row label="Пришло" value={money(s.incomeMinor)} />
+        <Row label="Отложено" value={`−${money(s.savedMinor)}`} />
+        <Row label="Потрачено" value={`−${money(s.spentMinor)}`} />
         <div className="border-t border-ink-700 pt-2">
-          <Row label="Осталось" value={money(r.leftMinor)} strong />
+          <Row label="Осталось" value={money(s.leftMinor)} strong />
         </div>
       </dl>
 
-      {s.history.some((h) => h.savedMinor > 0) && (
-        <>
-          <div className="mt-6 flex h-12 items-end gap-1" aria-hidden="true">
-            {s.history.map((point, index) => (
-              <div
-                key={point.month}
-                style={{ height: `${Math.max((point.savedMinor / peak) * 100, 2)}%` }}
-                className={`flex-1 rounded-t-sm ${
-                  index === s.history.length - 1 ? "bg-gain" : "bg-gain/30"
-                }`}
-              />
-            ))}
-          </div>
-          <p className="mt-2 text-xs text-ink-300">
-            {s.history[0]!.month} — {s.history.at(-1)!.month}
-          </p>
-        </>
+      {/* The figure behind "can we order sushi tonight". */}
+      {s.perDayLeftMinor !== null && s.daysRemaining > 0 && (
+        <p className="tnum mt-3 text-sm text-ink-300">
+          {money(s.perDayLeftMinor)} zł в день на оставшиеся {s.daysRemaining} дн.
+        </p>
       )}
     </section>
   );

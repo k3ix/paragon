@@ -35,8 +35,8 @@ function useInvalidateAll() {
       "pace",
       "tree",
       "commitments",
-      "savings",
-      "runway",
+      "periods",
+      "period-summary",
     ]) {
       qc.invalidateQueries({ queryKey: [key] });
     }
@@ -133,22 +133,22 @@ export function useTree(month: string) {
   });
 }
 
-export function useSavings(month: string) {
+export function usePeriods() {
   return useQuery({
-    queryKey: ["savings", month],
+    queryKey: ["periods"],
     queryFn: async () => {
-      const { data, error } = await client.api.savings.get({ query: { month } });
+      const { data, error } = await client.api.periods.get();
       if (error) throw error;
       return data;
     },
   });
 }
 
-export function useRunway(month: string) {
+export function usePeriodSummary(period: string) {
   return useQuery({
-    queryKey: ["runway", month],
+    queryKey: ["period-summary", period],
     queryFn: async () => {
-      const { data, error } = await client.api.runway.get({ query: { month } });
+      const { data, error } = await client.api["period-summary"].get({ query: { period } });
       if (error) throw error;
       return data;
     },

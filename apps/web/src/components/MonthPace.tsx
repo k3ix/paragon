@@ -1,8 +1,19 @@
 import { useState } from "react";
-import { usePace } from "../api/queries";
 import { money } from "../lib/format";
 
 type Part = { label: string; amountMinor: number };
+
+type Summary = {
+  spentMinor: number;
+  committedMinor: number;
+  occasionalMinor: number;
+  livingMinor: number;
+  committedParts: Part[];
+  occasionalParts: Part[];
+  livingParts: Part[];
+  perDayMinor: number | null;
+  daysRemaining: number;
+};
 
 /** Parts shown before the rest collapses behind "и ещё N". */
 const SHOWN = 3;
@@ -14,17 +25,15 @@ const SHOWN = 3;
  * Replaces the income/spending line chart, which drew a flat line and a vertical
  * cliff because income arrives once a month.
  */
-export function MonthPace({ month }: { month: string }) {
-  const pace = usePace(month);
-  if (!pace.data) return null;
-  const p = pace.data;
+export function MonthPace({ summary, budgetMinor }: { summary: Summary; budgetMinor: number | null }) {
+  const p = summary;
 
-  // The bar tracks ordinary living against its budget. A holiday paid this month is
+  // The bar tracks ordinary living against its budget. A holiday paid this period is
   // real money, but measuring it against a monthly budget it was never part of would
   // show a permanent overrun.
   const used =
-    p.budgetMinor && p.budgetMinor > 0 ? Math.min((p.livingMinor / p.budgetMinor) * 100, 100) : null;
-  const over = p.budgetMinor !== null && p.livingMinor > p.budgetMinor;
+    budgetMinor && budgetMinor > 0 ? Math.min((p.livingMinor / budgetMinor) * 100, 100) : null;
+  const over = budgetMinor !== null && p.livingMinor > budgetMinor;
 
   const groups = [
     { key: "committed", label: "обязательное", value: p.committedMinor, parts: p.committedParts },
@@ -75,8 +84,7 @@ export function MonthPace({ month }: { month: string }) {
             />
           </div>
           <p className="tnum mt-2 text-xs text-ink-300">
-            на жизнь {money(p.livingMinor)} из {money(p.budgetMinor!)} zł
-            {p.projectedMinor !== null && ` · к концу месяца выйдет ${money(p.projectedMinor)}`}
+            на жизнь {money(p.livingMinor)} из {money(budgetMinor!)} zł
           </p>
         </>
       )}

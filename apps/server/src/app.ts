@@ -13,7 +13,8 @@ import {
 } from "./services/summary";
 import { getBudget } from "./services/budget";
 import { getPace } from "./services/pace";
-import { getSavings, getRunway } from "./services/savings";
+import { payPeriods } from "./services/periods";
+import { getPeriodSummary } from "./services/period-summary";
 import {
   listCommitments,
   createCommitment,
@@ -90,9 +91,57 @@ export const app = new Elysia({ prefix: "/api" })
 
   .get("/tree", ({ query }) => getCategoryTreeBreakdown(query.month), { query: monthQuery })
 
-  .get("/savings", ({ query }) => getSavings(query.month), { query: monthQuery })
+  // Pay periods available to switch between, newest first. Empty until a salary is
+  // recorded, which is what the UI uses to decide whether to offer the toggle.
+  //
+  // The response is typed explicitly because `id` looks like an ISO date, and without
+  // a schema Elysia coerces it to a Date on the way out — the browser then receives an
+  // object where it expects a string.
+  .get("/periods", () => payPeriods(), {
+    response: t.Array(
+      t.Object({
+        kind: t.String(),
+        id: t.String(),
+        label: t.String(),
+        start: t.Number(),
+        end: t.Number(),
+        open: t.Boolean(),
+        expectedDays: t.Number(),
+      }),
+    ),
+  })
 
-  .get("/runway", ({ query }) => getRunway(query.month), { query: monthQuery })
+  // Accepts either a month ("2026-08") or a pay period start ("2026-08-10").
+  .get("/period-summary", ({ query }) => getPeriodSummary(query.period), {
+    query: t.Object({ period: t.String({ pattern: "^(\\d{4}-\\d{2}|pay-\\d{4}-\\d{2}-\\d{2})$" }) }),
+    // `period.id` needs the same protection from date coercion as /periods above.
+    response: t.Object({
+      period: t.Object({
+        kind: t.String(),
+        id: t.String(),
+        label: t.String(),
+        start: t.Number(),
+        end: t.Number(),
+        open: t.Boolean(),
+        expectedDays: t.Number(),
+      }),
+      incomeMinor: t.Number(),
+      savedMinor: t.Number(),
+      spentMinor: t.Number(),
+      leftMinor: t.Number(),
+      committedMinor: t.Number(),
+      occasionalMinor: t.Number(),
+      livingMinor: t.Number(),
+      committedParts: t.Array(t.Object({ label: t.String(), amountMinor: t.Number() })),
+      occasionalParts: t.Array(t.Object({ label: t.String(), amountMinor: t.Number() })),
+      livingParts: t.Array(t.Object({ label: t.String(), amountMinor: t.Number() })),
+      daysElapsed: t.Number(),
+      daysTotal: t.Number(),
+      daysRemaining: t.Number(),
+      perDayMinor: t.Union([t.Number(), t.Null()]),
+      perDayLeftMinor: t.Union([t.Number(), t.Null()]),
+    }),
+  })
 
   .get("/commitments", () => listCommitments())
 
