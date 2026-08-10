@@ -14,7 +14,7 @@ export function MonthPicker({
         <button
           type="button"
           onClick={() => onChange(shiftMonth(month, -1))}
-          aria-label="Previous month"
+          aria-label="Предыдущий месяц"
           className="rounded px-2 py-1 text-ink-300 hover:bg-ink-800 hover:text-ink-100"
         >
           ‹
@@ -22,7 +22,7 @@ export function MonthPicker({
         <button
           type="button"
           onClick={() => onChange(shiftMonth(month, 1))}
-          aria-label="Next month"
+          aria-label="Следующий месяц"
           className="rounded px-2 py-1 text-ink-300 hover:bg-ink-800 hover:text-ink-100"
         >
           ›

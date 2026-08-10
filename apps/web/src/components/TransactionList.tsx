@@ -1,81 +1,130 @@
 import { useState, type ReactNode } from "react";
-import { dayLabel, money } from "../lib/format";
+import { money, dayHeading } from "../lib/format";
 
+type Line = { id: number; amountMinor: number; categoryPath: string | null; note: string | null };
+
+/**
+ * Mirrors `TransactionRow` from `apps/server/src/services/queries.ts`. The type is not
+ * in `@paragon/shared` — it reaches the browser through Eden's inferred response type,
+ * which cannot be named here without importing the whole app type.
+ */
 type Row = {
   id: number;
   occurredOn: number;
-  type: string;
   totalMinor: number;
   merchantRaw: string | null;
   note: string | null;
-  lines: { id: number; amountMinor: number; categoryPath: string | null; note: string | null }[];
+  lines: Line[];
 };
 
-/** "groceries +2" — the first category plus how many others share the receipt. */
-function categoryLabel(lines: Row["lines"]): string {
-  const first = lines[0]?.categoryPath;
-  const leaf = first ? (first.split("/").at(-1) ?? first) : "uncategorized";
-  return lines.length > 1 ? `${leaf} +${lines.length - 1}` : leaf;
-}
-
+/**
+ * Purchases grouped by day with a per-day subtotal.
+ *
+ * Every line of a split receipt is shown. The previous version collapsed them into
+ * "Хозтовары +1", hiding exactly the breakdown that was entered by hand.
+ */
 export function TransactionList({
   rows,
+  filter,
+  onClearFilter,
   renderEditor,
 }: {
   rows: Row[];
+  filter: { path: string; name: string } | null;
+  onClearFilter: () => void;
   renderEditor: (row: Row, close: () => void) => ReactNode;
 }) {
   const [openId, setOpenId] = useState<number | null>(null);
 
-  if (rows.length === 0) {
-    return (
-      <section className="border-t border-ink-700 pt-6">
-        <h2 className="text-xs uppercase tracking-widest text-ink-300">Purchases</h2>
-        <p className="mt-4 text-sm text-ink-300">
-          Nothing recorded this month. Send a receipt photo to Claude to add one.
-        </p>
-      </section>
-    );
+  // Lines carry a full path ("Еда/Продукты"), so matching the prefix against a parent
+  // picks up its children too: "Еда" shows groceries and alcohol both. The
+  // uncategorized node has an empty path, which selects lines with no category at all.
+  const visible = filter
+    ? rows.filter((r) =>
+        filter.path === ""
+          ? r.lines.some((l) => l.categoryPath === null)
+          : r.lines.some(
+              (l) =>
+                l.categoryPath === filter.path || l.categoryPath?.startsWith(`${filter.path}/`),
+            ),
+      )
+    : rows;
+
+  // Rows arrive newest first, so insertion order gives days in the right order.
+  const byDay = new Map<string, Row[]>();
+  for (const row of visible) {
+    const key = dayHeading(row.occurredOn);
+    byDay.set(key, [...(byDay.get(key) ?? []), row]);
   }
 
   return (
-    <section className="border-t border-ink-700 pt-6">
-      <h2 className="text-xs uppercase tracking-widest text-ink-300">Purchases</h2>
+    <section>
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <h2 className="text-xs uppercase tracking-widest text-ink-300">Покупки</h2>
+        {filter && (
+          <button
+            type="button"
+            onClick={onClearFilter}
+            className="rounded border border-ink-700 px-2 py-1 text-xs text-ink-300 hover:bg-ink-800 hover:text-ink-100"
+          >
+            {filter.name || "Без категории"} — показать все
+          </button>
+        )}
+      </div>
 
-      <ul className="mt-4">
-        {rows.map((row) => (
-          <li key={row.id} className="border-b border-ink-700 last:border-0">
-            <button
-              type="button"
-              onClick={() => setOpenId(openId === row.id ? null : row.id)}
-              aria-expanded={openId === row.id}
-              className="grid w-full grid-cols-[3.5rem_1fr_auto] items-center gap-3 py-2.5 text-left text-sm hover:bg-ink-800/50 sm:grid-cols-[3.5rem_1fr_8rem_auto]"
-            >
-              <span className="tnum text-ink-300">{dayLabel(row.occurredOn)}</span>
-              <span className="truncate">{row.merchantRaw ?? "—"}</span>
-              <span className="hidden sm:block">
-                <span className="rounded bg-ink-800 px-2 py-0.5 text-xs text-ink-300">
-                  {row.type === "transfer" ? "transfer" : categoryLabel(row.lines)}
-                </span>
-              </span>
-              <span
-                className={`tnum whitespace-nowrap text-right ${
-                  row.type === "income"
-                    ? "text-gain"
-                    : row.type === "transfer"
-                      ? "text-ink-300"
-                      : ""
-                }`}
-              >
-                {row.type === "expense" ? "−" : row.type === "income" ? "+" : ""}
-                {money(row.totalMinor)}
-              </span>
-            </button>
+      {visible.length === 0 && <p className="mt-4 text-sm text-ink-300">Ничего не найдено.</p>}
 
-            {openId === row.id && renderEditor(row, () => setOpenId(null))}
-          </li>
-        ))}
-      </ul>
+      {[...byDay.entries()].map(([day, dayRows]) => (
+        <div key={day} className="mt-6">
+          <div className="flex items-baseline justify-between gap-3 border-b border-ink-700 pb-1">
+            <h3 className="text-xs text-ink-300">{day}</h3>
+            <span className="tnum text-xs whitespace-nowrap text-ink-300 tabular-nums">
+              {money(dayRows.reduce((sum, r) => sum + r.totalMinor, 0))}
+            </span>
+          </div>
+
+          <ul>
+            {dayRows.map((row) => (
+              <li key={row.id} className="border-b border-ink-800 last:border-0">
+                <button
+                  type="button"
+                  onClick={() => setOpenId(openId === row.id ? null : row.id)}
+                  aria-expanded={openId === row.id}
+                  className="flex w-full items-baseline gap-3 py-2 text-left text-sm hover:bg-ink-800/50"
+                >
+                  <span className="flex-1">{row.merchantRaw ?? "Без названия"}</span>
+                  <span className="tnum whitespace-nowrap tabular-nums">
+                    −{money(row.totalMinor)}
+                  </span>
+                </button>
+
+                {/* Amounts appear only on split receipts; a single line just repeats
+                    the total already shown above it. */}
+                <ul className="pb-2">
+                  {row.lines.map((line) => (
+                    <li
+                      key={line.id}
+                      className="flex items-baseline gap-3 pl-4 text-xs text-ink-300"
+                    >
+                      <span className="flex-1">
+                        {line.categoryPath ?? "Без категории"}
+                        {line.note && ` · ${line.note}`}
+                      </span>
+                      {row.lines.length > 1 && (
+                        <span className="tnum whitespace-nowrap tabular-nums">
+                          {money(line.amountMinor)}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+
+                {openId === row.id && <div className="pb-3">{renderEditor(row, () => setOpenId(null))}</div>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </section>
   );
 }

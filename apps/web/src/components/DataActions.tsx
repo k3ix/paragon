@@ -11,9 +11,9 @@ export function DataActions({ month }: { month: string }) {
       const res = await fetch("/api/backup", { method: "POST" });
       if (!res.ok) throw new Error(String(res.status));
       const body = (await res.json()) as { sizeBytes: number };
-      setStatus(`Backed up ${Math.round(body.sizeBytes / 1024)} KB.`);
+      setStatus(`Бэкап готов, ${Math.round(body.sizeBytes / 1024)} КБ.`);
     } catch {
-      setStatus("Backup failed. Is the server running?");
+      setStatus("Бэкап не удался. Сервер запущен?");
     } finally {
       setBusy(false);
     }
@@ -21,20 +21,20 @@ export function DataActions({ month }: { month: string }) {
 
   return (
     <section className="mt-10 flex flex-wrap items-center gap-3 border-t border-ink-700 pt-6 text-sm">
-      <span className="text-xs uppercase tracking-widest text-ink-300">Your data</span>
+      <span className="text-xs uppercase tracking-widest text-ink-300">Ваши данные</span>
 
       {/* Plain links: the server sets content-disposition, so no JavaScript is needed. */}
       <a
         href={`/api/export.csv?month=${month}`}
         className="rounded border border-ink-700 px-3 py-1.5 text-ink-300 hover:bg-ink-800 hover:text-ink-100"
       >
-        This month as CSV
+        Этот месяц в CSV
       </a>
       <a
         href="/api/export.json"
         className="rounded border border-ink-700 px-3 py-1.5 text-ink-300 hover:bg-ink-800 hover:text-ink-100"
       >
-        Everything as JSON
+        Всё в JSON
       </a>
 
       <button
@@ -43,7 +43,7 @@ export function DataActions({ month }: { month: string }) {
         disabled={busy}
         className="rounded border border-ink-700 px-3 py-1.5 text-ink-300 hover:bg-ink-800 hover:text-ink-100 disabled:opacity-50"
       >
-        {busy ? "Backing up…" : "Back up now"}
+        {busy ? "Сохраняю…" : "Сделать бэкап"}
       </button>
 
       {status && <span className="text-xs text-ink-300">{status}</span>}

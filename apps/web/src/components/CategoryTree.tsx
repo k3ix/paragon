@@ -27,7 +27,7 @@ export function CategoryTree() {
 
   return (
     <section>
-      <h2 className="text-xs uppercase tracking-widest text-ink-300">Categories</h2>
+      <h2 className="text-xs uppercase tracking-widest text-ink-300">Категории</h2>
 
       <ul className="mt-4">
         {rows.map(({ node, depth }) => (
@@ -40,7 +40,7 @@ export function CategoryTree() {
                 <input
                   autoFocus
                   value={editingName}
-                  aria-label={`New name for ${node.name}`}
+                  aria-label={`Новое название для ${node.name}`}
                   onChange={(e) => setEditingName(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && editingName.trim()) {
@@ -58,7 +58,7 @@ export function CategoryTree() {
                   {node.name}
                   {node.isFixed && (
                     <span className="ml-2 rounded bg-ink-800 px-1.5 py-0.5 text-xs text-ink-300">
-                      fixed
+                      постоянная
                     </span>
                   )}
                 </>
@@ -68,11 +68,11 @@ export function CategoryTree() {
             <select
               value={node.isFixed ? "fixed" : "flexible"}
               onChange={(e) => update.mutate({ id: node.id, isFixed: e.target.value === "fixed" })}
-              aria-label={`Classification for ${node.name}`}
+              aria-label={`Тип категории ${node.name}`}
               className="rounded border border-ink-700 bg-ink-800 px-2 py-1 text-xs text-ink-300"
             >
-              <option value="flexible">flexible</option>
-              <option value="fixed">fixed</option>
+              <option value="flexible">гибкая</option>
+              <option value="fixed">постоянная</option>
             </select>
 
             <button
@@ -83,14 +83,14 @@ export function CategoryTree() {
               }}
               className="rounded px-2 py-1 text-xs text-ink-300 hover:bg-ink-800"
             >
-              Rename
+              Переименовать
             </button>
             <button
               type="button"
               onClick={() => archive.mutate(node.id)}
               className="rounded px-2 py-1 text-xs text-ink-300 hover:bg-drain/10 hover:text-drain"
             >
-              Archive
+              В архив
             </button>
           </li>
         ))}
@@ -100,22 +100,22 @@ export function CategoryTree() {
 
       <div className="mt-6 flex flex-wrap items-end gap-2 border-t border-ink-700 pt-4">
         <label className="text-xs text-ink-300">
-          New category
+          Новая категория
           <input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="Name"
+            placeholder="Название"
             className="mt-1 block rounded border border-ink-700 bg-ink-800 px-2 py-1.5 text-sm text-ink-100"
           />
         </label>
         <label className="text-xs text-ink-300">
-          Under
+          Внутри
           <select
             value={newParent ?? ""}
             onChange={(e) => setNewParent(e.target.value ? Number(e.target.value) : null)}
             className="mt-1 block rounded border border-ink-700 bg-ink-800 px-2 py-1.5 text-sm text-ink-100"
           >
-            <option value="">Top level</option>
+            <option value="">Верхний уровень</option>
             {rows.map(({ node, depth }) => (
               <option key={node.id} value={node.id}>
                 {" ".repeat(depth * 2)}
@@ -135,7 +135,7 @@ export function CategoryTree() {
           }
           className="rounded bg-gain px-3 py-1.5 text-sm font-medium text-ink-900 disabled:opacity-40"
         >
-          Add
+          Добавить
         </button>
       </div>
     </section>

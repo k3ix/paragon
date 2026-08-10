@@ -31,7 +31,7 @@ export function CategoryPicker({
       onChange={(e) => onChange(e.target.value || null)}
       className="w-full rounded border border-ink-700 bg-ink-800 px-2 py-1.5 text-sm text-ink-100"
     >
-      <option value="">Uncategorized</option>
+      <option value="">Без категории</option>
       {options.map((option) => (
         <option key={option.path} value={option.path}>
           {" ".repeat(option.depth * 2)}

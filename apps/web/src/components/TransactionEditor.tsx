@@ -63,7 +63,7 @@ export function TransactionEditor({ row, onClose }: { row: Row; onClose: () => v
     <div className="border-l-2 border-ink-500 bg-ink-800/40 px-4 py-4">
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="text-xs text-ink-300">
-          Date
+          Дата
           <input
             type="date"
             value={date}
@@ -72,7 +72,7 @@ export function TransactionEditor({ row, onClose }: { row: Row; onClose: () => v
           />
         </label>
         <label className="text-xs text-ink-300 sm:col-span-2">
-          Merchant
+          Магазин
           <input
             value={merchant}
             onChange={(e) => setMerchant(e.target.value)}
@@ -81,7 +81,7 @@ export function TransactionEditor({ row, onClose }: { row: Row; onClose: () => v
         </label>
       </div>
 
-      <p className="mt-4 text-xs uppercase tracking-widest text-ink-300">Lines</p>
+      <p className="mt-4 text-xs uppercase tracking-widest text-ink-300">Строки</p>
       <div className="mt-2 space-y-2">
         {lines.map((line, index) => (
           <div key={index} className="grid grid-cols-[1fr_100px_auto] items-center gap-2">
@@ -94,7 +94,7 @@ export function TransactionEditor({ row, onClose }: { row: Row; onClose: () => v
             <input
               value={line.amount}
               inputMode="decimal"
-              aria-label={`Amount for line ${index + 1}`}
+              aria-label={`Сумма строки ${index + 1}`}
               onChange={(e) =>
                 setLines(lines.map((l, i) => (i === index ? { ...l, amount: e.target.value } : l)))
               }
@@ -103,7 +103,7 @@ export function TransactionEditor({ row, onClose }: { row: Row; onClose: () => v
             <button
               type="button"
               onClick={() => setLines(lines.filter((_, i) => i !== index))}
-              aria-label={`Remove line ${index + 1}`}
+              aria-label={`Удалить строку ${index + 1}`}
               disabled={lines.length === 1}
               className="rounded px-2 py-1 text-ink-300 hover:bg-ink-700 disabled:opacity-30"
             >
@@ -119,7 +119,7 @@ export function TransactionEditor({ row, onClose }: { row: Row; onClose: () => v
           onClick={() => setLines([...lines, { amount: "0.00", category: null, note: "" }])}
           className="rounded border border-ink-700 px-2 py-1 text-xs text-ink-300 hover:bg-ink-700"
         >
-          Add line
+          Добавить строку
         </button>
         {/*
          * Advisory only — the server enforces the invariant. Naming the difference
@@ -127,13 +127,13 @@ export function TransactionEditor({ row, onClose }: { row: Row; onClose: () => v
          */}
         <span className={`tnum text-right text-xs ${balanced ? "text-gain" : "text-flag"}`}>
           {balanced
-            ? `Balances at ${formatMinor(row.totalMinor)}`
-            : `Lines total ${formatMinor(totalMinor)}, receipt says ${formatMinor(row.totalMinor)}`}
+            ? `Сходится: ${formatMinor(row.totalMinor)}`
+            : `Строки дают ${formatMinor(totalMinor)}, в чеке ${formatMinor(row.totalMinor)}`}
         </span>
       </div>
 
       <label className="mt-4 block text-xs text-ink-300">
-        Note
+        Заметка
         <input
           value={note}
           onChange={(e) => setNote(e.target.value)}
@@ -150,14 +150,14 @@ export function TransactionEditor({ row, onClose }: { row: Row; onClose: () => v
           disabled={update.isPending}
           className="rounded bg-gain px-3 py-1.5 text-sm font-medium text-ink-900 disabled:opacity-50"
         >
-          {update.isPending ? "Saving…" : "Save"}
+          {update.isPending ? "Сохраняю…" : "Сохранить"}
         </button>
         <button
           type="button"
           onClick={onClose}
           className="rounded border border-ink-700 px-3 py-1.5 text-sm text-ink-300 hover:bg-ink-700"
         >
-          Cancel
+          Отмена
         </button>
         <button
           type="button"
@@ -165,7 +165,7 @@ export function TransactionEditor({ row, onClose }: { row: Row; onClose: () => v
           disabled={remove.isPending}
           className="ml-auto rounded px-3 py-1.5 text-sm text-drain hover:bg-drain/10 disabled:opacity-50"
         >
-          Delete
+          Удалить
         </button>
       </div>
     </div>
