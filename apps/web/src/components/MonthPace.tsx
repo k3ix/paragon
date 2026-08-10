@@ -1,9 +1,15 @@
+import { useState } from "react";
 import { usePace } from "../api/queries";
 import { money } from "../lib/format";
 
+type Part = { label: string; amountMinor: number };
+
+/** Parts shown before the rest collapses behind "и ещё N". */
+const SHOWN = 3;
+
 /**
- * How the month is going: total, daily rate, and — once a budget exists — a bar
- * showing how much of it is used.
+ * How the month is going: the total, what it is made of, and — once a budget exists —
+ * a bar showing how much of ordinary living is used.
  *
  * Replaces the income/spending line chart, which drew a flat line and a vertical
  * cliff because income arrives once a month.
@@ -17,16 +23,19 @@ export function MonthPace({ month }: { month: string }) {
   // real money, but measuring it against a monthly budget it was never part of would
   // show a permanent overrun.
   const used =
-    p.budgetMinor && p.budgetMinor > 0
-      ? Math.min((p.livingMinor / p.budgetMinor) * 100, 100)
-      : null;
+    p.budgetMinor && p.budgetMinor > 0 ? Math.min((p.livingMinor / p.budgetMinor) * 100, 100) : null;
   const over = p.budgetMinor !== null && p.livingMinor > p.budgetMinor;
 
-  const parts = [
-    { label: "обязательное", value: p.committedMinor },
-    { label: "разовое", value: p.occasionalMinor },
-    { label: "на жизнь", value: p.livingMinor },
-  ].filter((part) => part.value !== 0);
+  const groups = [
+    { key: "committed", label: "обязательное", value: p.committedMinor, parts: p.committedParts },
+    {
+      key: "occasional",
+      label: "разовое",
+      value: p.occasionalMinor,
+      parts: p.occasionalParts,
+    },
+    { key: "living", label: "на жизнь", value: p.livingMinor, parts: p.livingParts },
+  ].filter((group) => group.value !== 0);
 
   return (
     <section>
@@ -44,19 +53,22 @@ export function MonthPace({ month }: { month: string }) {
 
       {/* The whole sum stays visible and is then accounted for, rather than three
           separate figures that never add up to what left the account. */}
-      {parts.length > 1 && (
-        <ul className="tnum mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
-          {parts.map((part) => (
-            <li key={part.label} className="whitespace-nowrap text-ink-300">
-              {part.label} <span className="text-ink-100">{money(part.value)}</span>
-            </li>
+      {groups.length > 1 && (
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          {groups.map((group) => (
+            <Group
+              key={group.key}
+              label={group.label}
+              value={group.value}
+              parts={group.parts}
+            />
           ))}
-        </ul>
+        </div>
       )}
 
       {used !== null && (
         <>
-          <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-ink-800">
+          <div className="mt-5 h-2 w-full overflow-hidden rounded-full bg-ink-800">
             <div
               style={{ width: `${used}%` }}
               className={`h-full rounded-full ${over ? "bg-drain" : "bg-gain"}`}
@@ -69,5 +81,59 @@ export function MonthPace({ month }: { month: string }) {
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * A subtotal with the purchases behind it.
+ *
+ * The largest few are always visible — for one-off spending that is usually the whole
+ * story — and the tail expands on demand rather than turning the page into a list.
+ */
+function Group({ label, value, parts }: { label: string; value: number; parts: Part[] }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const visible = expanded ? parts : parts.slice(0, SHOWN);
+  const hidden = parts.length - visible.length;
+
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-2 border-b border-ink-700 pb-1">
+        <span className="text-xs text-ink-300">{label}</span>
+        <span className="tnum text-sm whitespace-nowrap tabular-nums">{money(value)}</span>
+      </div>
+
+      <ul className="mt-2 space-y-1">
+        {visible.map((part) => (
+          <li
+            key={part.label}
+            className="flex items-baseline justify-between gap-2 text-xs text-ink-300"
+          >
+            <span className="truncate">{part.label}</span>
+            <span className="tnum whitespace-nowrap tabular-nums">{money(part.amountMinor)}</span>
+          </li>
+        ))}
+      </ul>
+
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="mt-1 text-xs text-ink-300 underline decoration-ink-700 underline-offset-2 hover:text-ink-100"
+        >
+          и ещё {hidden}
+        </button>
+      )}
+
+      {expanded && parts.length > SHOWN && (
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          className="mt-1 text-xs text-ink-300 underline decoration-ink-700 underline-offset-2 hover:text-ink-100"
+        >
+          свернуть
+        </button>
+      )}
+    </div>
   );
 }

@@ -128,6 +128,79 @@ describe("pace", () => {
     expect(pace.occasionalMinor).toBe(0);
   });
 
+  it("names what each subtotal is made of, biggest first", () => {
+    createCategory({ name: "Путешествия", isOccasional: true });
+    createCategory({ name: "Еда" });
+    addTransactions([
+      {
+        date: "2026-08-02",
+        total: "3000.00",
+        merchant: "Airbnb",
+        lineItems: [{ amount: "3000.00", category: "Путешествия" }],
+      },
+      {
+        date: "2026-08-03",
+        total: "100.00",
+        merchant: "Żabka",
+        lineItems: [{ amount: "100.00", category: "Еда" }],
+      },
+      {
+        date: "2026-08-04",
+        total: "900.00",
+        merchant: "Biedronka",
+        lineItems: [{ amount: "900.00", category: "Еда" }],
+      },
+    ]);
+
+    const pace = getPace("2026-08", august(9));
+
+    expect(pace.occasionalParts).toEqual([{ label: "Airbnb", amountMinor: 300000 }]);
+    expect(pace.livingParts.map((p) => p.label)).toEqual(["Biedronka", "Żabka"]);
+  });
+
+  it("groups repeat visits to one shop into a single part", () => {
+    createCategory({ name: "Еда" });
+    for (const day of [2, 3, 4]) {
+      addTransactions([
+        {
+          date: `2026-08-0${day}`,
+          total: "50.00",
+          merchant: "Żabka",
+          note: `visit ${day}`,
+          lineItems: [{ amount: "50.00", category: "Еда" }],
+        },
+      ]);
+    }
+
+    const pace = getPace("2026-08", august(9));
+
+    expect(pace.livingParts).toEqual([{ label: "Żabka", amountMinor: 15000 }]);
+  });
+
+  it("keeps each subtotal's parts adding up to it", () => {
+    const rentCategory = createCategory({ name: "Аренда" });
+    createCategory({ name: "Путешествия", isOccasional: true });
+    createCategory({ name: "Еда" });
+    createCommitment({
+      kind: "expense",
+      name: "Аренда",
+      amountMinor: 400000,
+      categoryId: rentCategory.id,
+      activeFrom: "2026-01",
+    });
+    categorised(1, "4000.00", "Аренда");
+    categorised(2, "3000.00", "Путешествия");
+    categorised(3, "500.00", "Еда");
+
+    const pace = getPace("2026-08", august(9));
+    const sum = (parts: { amountMinor: number }[]) =>
+      parts.reduce((total, p) => total + p.amountMinor, 0);
+
+    expect(sum(pace.committedParts)).toBe(pace.committedMinor);
+    expect(sum(pace.occasionalParts)).toBe(pace.occasionalMinor);
+    expect(sum(pace.livingParts)).toBe(pace.livingMinor);
+  });
+
   it("refuses an impossible month", () => {
     expect(() => getPace("2026-13")).toThrow(/Invalid month/);
   });
