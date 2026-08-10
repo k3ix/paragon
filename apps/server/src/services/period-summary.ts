@@ -117,13 +117,18 @@ export function getPeriodSummary(
   const savedMinor = totals.get("transfer") ?? 0;
   const spentMinor = totals.get("expense") ?? 0;
 
-  // Commitments are declared per month; a pay period spans at most two, so the month
-  // its start falls in is the one whose commitments apply.
+  // Commitments are declared per month, but a pay period straddles two — rent paid on
+  // the 6th falls inside a period that began in July. Taking only the start month
+  // missed it entirely and filed the rent under living costs.
   const startMonth = new Date(start * 1000).toISOString().slice(0, 7);
+  const endMonth = new Date((end - 1) * 1000).toISOString().slice(0, 7);
   parseMonth(startMonth);
+  parseMonth(endMonth);
 
   const occasional = occasionalCategoryIds();
-  const committed = committedCategoryIds(startMonth);
+  const committed = [
+    ...new Set([...committedCategoryIds(startMonth), ...committedCategoryIds(endMonth)]),
+  ];
 
   const occasionalMinor = linesIn(start, end, occasional);
   const committedMinor = linesIn(start, end, committed);

@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from "bun:test";
 import { resetTestDb } from "./helpers/db";
 import { createCategory } from "../src/services/categories";
+import { createCommitment } from "../src/services/commitments";
 import { addTransactions } from "../src/services/transactions";
 import { payPeriods, resolvePeriod } from "../src/services/periods";
 import { listTransactions } from "../src/services/queries";
@@ -218,6 +219,29 @@ describe("period summary", () => {
 
     // Only the 100.00 spent after the new salary, not August's earlier 900.00.
     expect(tree.find((n) => n.name === "Еда")!.totalMinor).toBe(10000);
+  });
+
+  it("recognises a commitment paid in the month the period ends in", () => {
+    const rent = createCategory({ name: "Аренда" });
+    createCategory({ name: "Еда" });
+    createCommitment({
+      kind: "expense",
+      name: "Аренда",
+      amountMinor: 384283,
+      categoryId: rent.id,
+      activeFrom: "2026-08",
+    });
+
+    // The period opens in July but the rent is paid on 6 August, inside it.
+    salary("2026-07-31", "16280.40");
+    expense("2026-08-06", "3842.83", "Аренда");
+    expense("2026-08-07", "100.00", "Еда");
+    salary("2026-08-10", "28030.00");
+
+    const summary = getPeriodSummary("pay-2026-07-31", at(2026, 8, 20));
+
+    expect(summary.committedMinor).toBe(384283);
+    expect(summary.livingMinor).toBe(10000);
   });
 
   it("still reports a calendar month", () => {
