@@ -1,6 +1,6 @@
 import { and, gte, lt, sql } from "drizzle-orm";
 import { db } from "../db";
-import { transactions, lineItems } from "../db/schema";
+import { transactions, lineItems, categories } from "../db/schema";
 import { resolvePeriod, type Period } from "./periods";
 import { occasionalCategoryIds, committedCategoryIds } from "./budget";
 import { parseMonth } from "./month";
@@ -78,6 +78,63 @@ function partsIn(start: number, end: number, categoryIds: number[] | null): Spen
     .sort((a, b) => b.amountMinor - a.amountMinor);
 }
 
+/**
+ * Ordinary spending in a window, grouped by top-level category.
+ *
+ * Living costs are the long tail — twenty shops, half of them supermarkets — and
+ * knowing the split between Żabka and Biedronka answers nothing. The category is the
+ * decision; the shop is just where it happened. Committed and one-off spending keep
+ * their merchants, where "Airbnb" and "Heimstaden" name the thing itself.
+ */
+function categoryPartsIn(start: number, end: number, excludedIds: number[]): SpendPart[] {
+  const rows = db
+    .select({
+      categoryId: lineItems.categoryId,
+      amountMinor: sql<number>`sum(${lineItems.amountMinor})`,
+    })
+    .from(lineItems)
+    .innerJoin(transactions, sql`${transactions.id} = ${lineItems.transactionId}`)
+    .where(
+      and(
+        sql`${transactions.type} = 'expense'`,
+        gte(transactions.occurredOn, start),
+        lt(transactions.occurredOn, end),
+        excludedIds.length > 0 ? sql`${lineItems.categoryId} not in ${excludedIds}` : undefined,
+      ),
+    )
+    .groupBy(lineItems.categoryId)
+    .all();
+
+  const all = db
+    .select({ id: categories.id, name: categories.name, parentId: categories.parentId })
+    .from(categories)
+    .all();
+  const byId = new Map(all.map((c) => [c.id, c]));
+
+  /** Walks to the root ancestor; the visited set guards against a parent cycle. */
+  function rootName(id: number): string {
+    const visited = new Set<number>();
+    let current = byId.get(id);
+    while (current && current.parentId !== null && !visited.has(current.id)) {
+      visited.add(current.id);
+      const parent = byId.get(current.parentId);
+      if (!parent) break;
+      current = parent;
+    }
+    return current?.name ?? "Без категории";
+  }
+
+  const totals = new Map<string, number>();
+  for (const row of rows) {
+    const label = row.categoryId === null ? "Без категории" : rootName(row.categoryId);
+    totals.set(label, (totals.get(label) ?? 0) + row.amountMinor);
+  }
+
+  return [...totals.entries()]
+    .map(([label, amountMinor]) => ({ label, amountMinor }))
+    .sort((a, b) => b.amountMinor - a.amountMinor);
+}
+
 /** Sum of expense lines in a window falling in the given categories. */
 function linesIn(start: number, end: number, categoryIds: number[]): number {
   if (categoryIds.length === 0) return 0;
@@ -137,14 +194,9 @@ export function getPeriodSummary(
   const committedParts = partsIn(start, end, committed);
   const occasionalParts = partsIn(start, end, occasional);
 
-  const claimed = new Map<string, number>();
-  for (const part of [...committedParts, ...occasionalParts]) {
-    claimed.set(part.label, (claimed.get(part.label) ?? 0) + part.amountMinor);
-  }
-  const livingParts = partsIn(start, end, null)
-    .map((p) => ({ ...p, amountMinor: p.amountMinor - (claimed.get(p.label) ?? 0) }))
-    .filter((p) => p.amountMinor > 0)
-    .sort((a, b) => b.amountMinor - a.amountMinor);
+  // Living costs are everything the other two did not claim, reported by category
+  // rather than by shop.
+  const livingParts = categoryPartsIn(start, end, [...committed, ...occasional]);
 
   // An open pay period runs to "now", so its actual length says nothing about how
   // long the money has to last. The expected length does.

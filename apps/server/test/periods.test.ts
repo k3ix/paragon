@@ -244,6 +244,26 @@ describe("period summary", () => {
     expect(summary.livingMinor).toBe(10000);
   });
 
+  it("reports living costs by category and one-offs by merchant", () => {
+    const food = createCategory({ name: "Еда" });
+    createCategory({ name: "Продукты", parentId: food.id });
+    createCategory({ name: "Рестораны", parentId: food.id });
+    createCategory({ name: "Путешествия", isOccasional: true });
+
+    salary("2026-08-10", "28030.00");
+    expense("2026-08-11", "3000.00", "Путешествия");
+    expense("2026-08-12", "100.00", "Еда/Продукты");
+    expense("2026-08-13", "200.00", "Еда/Рестораны");
+
+    const summary = getPeriodSummary("pay-2026-08-10", at(2026, 8, 20));
+
+    // Groceries and restaurants roll up: the category is the decision, the shop is
+    // only where it happened.
+    expect(summary.livingParts).toEqual([{ label: "Еда", amountMinor: 30000 }]);
+    // One-offs keep their merchant, which names the thing itself.
+    expect(summary.occasionalParts[0]!.label).toMatch(/Shop/);
+  });
+
   it("still reports a calendar month", () => {
     createCategory({ name: "Еда" });
     expense("2026-08-02", "100.00", "Еда");
