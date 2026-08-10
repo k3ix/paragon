@@ -5,7 +5,20 @@ import {
   updateCategory,
   archiveCategory,
 } from "./services/categories";
-import { getMonthSummary, getMonthlyTrend, getCategoryBreakdown } from "./services/summary";
+import {
+  getMonthSummary,
+  getMonthlyTrend,
+  getCategoryBreakdown,
+  getCategoryTreeBreakdown,
+} from "./services/summary";
+import { getBudget } from "./services/budget";
+import { getPace } from "./services/pace";
+import {
+  listCommitments,
+  createCommitment,
+  updateCommitment,
+  endCommitment,
+} from "./services/commitments";
 import { listTransactions } from "./services/queries";
 import { updateTransaction, deleteTransaction } from "./services/transactions";
 import { listMerchants } from "./services/merchants";
@@ -49,7 +62,9 @@ export const app = new Elysia({ prefix: "/api" })
       /already exists/i.test(message) ||
       /cycle/i.test(message) ||
       /requires line items/i.test(message) ||
-      /needs at least one filter/i.test(message)
+      /needs at least one filter/i.test(message) ||
+      /must be positive/i.test(message) ||
+      /before it starts/i.test(message)
     ) {
       set.status = 422;
     }
@@ -67,6 +82,53 @@ export const app = new Elysia({ prefix: "/api" })
   })
 
   .get("/breakdown", ({ query }) => getCategoryBreakdown(query.month), { query: monthQuery })
+
+  .get("/budget", ({ query }) => getBudget(query.month), { query: monthQuery })
+
+  .get("/pace", ({ query }) => getPace(query.month), { query: monthQuery })
+
+  .get("/tree", ({ query }) => getCategoryTreeBreakdown(query.month), { query: monthQuery })
+
+  .get("/commitments", () => listCommitments())
+
+  .post("/commitments", ({ body }) => createCommitment(body), {
+    body: t.Object({
+      kind: t.Union([t.Literal("income"), t.Literal("expense")]),
+      name: t.String({ minLength: 1 }),
+      amountMinor: t.Number(),
+      categoryId: t.Optional(t.Union([t.Number(), t.Null()])),
+      activeFrom: t.String({ pattern: monthPattern }),
+      activeTo: t.Optional(t.Union([t.String({ pattern: monthPattern }), t.Null()])),
+    }),
+  })
+
+  .patch("/commitments/:id", ({ params, body }) => updateCommitment(Number(params.id), body), {
+    params: t.Object({ id: t.String() }),
+    body: t.Object({
+      kind: t.Optional(t.Union([t.Literal("income"), t.Literal("expense")])),
+      name: t.Optional(t.String({ minLength: 1 })),
+      amountMinor: t.Optional(t.Number()),
+      categoryId: t.Optional(t.Union([t.Number(), t.Null()])),
+      activeFrom: t.Optional(t.String({ pattern: monthPattern })),
+      activeTo: t.Optional(t.Union([t.String({ pattern: monthPattern }), t.Null()])),
+    }),
+  })
+
+  // DELETE ends a commitment rather than removing it: past months must keep the
+  // amount that actually applied to them. The month defaults to the current one so
+  // the button in the UI needs no argument.
+  .delete(
+    "/commitments/:id",
+    ({ params, query }) => {
+      const now = new Date();
+      const thisMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+      return endCommitment(Number(params.id), query.month ?? thisMonth);
+    },
+    {
+      params: t.Object({ id: t.String() }),
+      query: t.Object({ month: t.Optional(t.String({ pattern: monthPattern })) }),
+    },
+  )
 
   .get(
     "/transactions",
