@@ -8,12 +8,12 @@ import { client } from "./client";
  * response type — so the status is what carries the meaning.
  */
 function errorMessage(error: { status?: number; value?: unknown }): string {
-  if (error.status === 404) return "That entry no longer exists.";
+  if (error.status === 404) return "Эта запись больше не существует.";
   if (error.status === 422) {
     const value = error.value as { error?: string } | undefined;
-    return value?.error ?? "The change was rejected: check the amounts and category.";
+    return value?.error ?? "Изменение отклонено: проверьте суммы и категорию.";
   }
-  return "Could not save. Is the server running?";
+  return "Не удалось сохранить. Сервер запущен?";
 }
 
 /**
@@ -24,7 +24,18 @@ function errorMessage(error: { status?: number; value?: unknown }): string {
 function useInvalidateAll() {
   const qc = useQueryClient();
   return () => {
-    for (const key of ["summary", "trend", "breakdown", "transactions", "categories", "merchants"]) {
+    for (const key of [
+      "summary",
+      "trend",
+      "breakdown",
+      "transactions",
+      "categories",
+      "merchants",
+      "budget",
+      "pace",
+      "tree",
+      "commitments",
+    ]) {
       qc.invalidateQueries({ queryKey: [key] });
     }
   };
@@ -84,6 +95,95 @@ export function useTransactions(month: string, limit = 50) {
       if (error) throw error;
       return data;
     },
+  });
+}
+
+export function useBudget(month: string) {
+  return useQuery({
+    queryKey: ["budget", month],
+    queryFn: async () => {
+      const { data, error } = await client.api.budget.get({ query: { month } });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function usePace(month: string) {
+  return useQuery({
+    queryKey: ["pace", month],
+    queryFn: async () => {
+      const { data, error } = await client.api.pace.get({ query: { month } });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useTree(month: string) {
+  return useQuery({
+    queryKey: ["tree", month],
+    queryFn: async () => {
+      const { data, error } = await client.api.tree.get({ query: { month } });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useCommitments() {
+  return useQuery({
+    queryKey: ["commitments"],
+    queryFn: async () => {
+      const { data, error } = await client.api.commitments.get();
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useCreateCommitment() {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: async (input: {
+      kind: "income" | "expense";
+      name: string;
+      amountMinor: number;
+      categoryId?: number | null;
+      activeFrom: string;
+    }) => {
+      const { data, error } = await client.api.commitments.post(input);
+      if (error) throw new Error(errorMessage(error));
+      return data;
+    },
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateCommitment() {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: async (input: { id: number; name?: string; amountMinor?: number }) => {
+      const { id, ...patch } = input;
+      const { data, error } = await client.api.commitments({ id: String(id) }).patch(patch);
+      if (error) throw new Error(errorMessage(error));
+      return data;
+    },
+    onSuccess: invalidate,
+  });
+}
+
+export function useEndCommitment() {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: async (input: { id: number; month: string }) => {
+      const { data, error } = await client.api
+        .commitments({ id: String(input.id) })
+        .delete(undefined, { query: { month: input.month } });
+      if (error) throw new Error(errorMessage(error));
+      return data;
+    },
+    onSuccess: invalidate,
   });
 }
 

@@ -9,18 +9,28 @@ export function money(minor: number): string {
   return `${negative ? "−" : ""}${grouped}.${fraction}`;
 }
 
-/** "2026-08" to "August 2026". */
+/** "2026-08" to "август 2026". */
 export function monthLabel(month: string): string {
   const [year, m] = month.split("-");
   const date = new Date(Date.UTC(Number(year), Number(m) - 1, 1));
-  return date.toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+  return date.toLocaleDateString("ru-RU", { month: "long", year: "numeric", timeZone: "UTC" });
 }
 
-/** Unix seconds to "9 Aug". */
+/** Unix seconds to "9 авг.". */
 export function dayLabel(occurredOn: number): string {
-  return new Date(occurredOn * 1000).toLocaleDateString("en-GB", {
+  return new Date(occurredOn * 1000).toLocaleDateString("ru-RU", {
     day: "numeric",
     month: "short",
+    timeZone: "UTC",
+  });
+}
+
+/** Unix seconds to "воскресенье, 9 августа", for grouping headings. */
+export function dayHeading(occurredOn: number): string {
+  return new Date(occurredOn * 1000).toLocaleDateString("ru-RU", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
     timeZone: "UTC",
   });
 }
