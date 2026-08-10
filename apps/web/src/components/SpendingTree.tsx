@@ -86,13 +86,17 @@ function Node({
           {node.share}%
         </span>
 
-        {/* A delta only says something once the previous month has data to compare. */}
-        <span className="tnum hidden w-20 text-right text-xs tabular-nums sm:inline">
+        {/*
+         * A delta only says something once the previous period has data to compare.
+         * It is neutral in colour: spending more on a category is a fact, not an
+         * alarm — red is reserved for actually exceeding a budget.
+         */}
+        <span className="tnum hidden w-20 text-right text-xs text-ink-500 tabular-nums sm:inline">
           {node.previousMinor > 0 && node.deltaMinor !== 0 && (
-            <span className={node.deltaMinor > 0 ? "text-drain" : "text-gain"}>
+            <>
               {node.deltaMinor > 0 ? "+" : "−"}
               {money(Math.abs(node.deltaMinor))}
-            </span>
+            </>
           )}
         </span>
 
