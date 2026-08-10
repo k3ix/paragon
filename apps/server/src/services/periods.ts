@@ -92,9 +92,16 @@ export function payPeriods(now: number = Math.floor(Date.now() / 1000)): Period[
 
   // Closed periods have a real length; the open one borrows their average so the
   // "per day remaining" figure exists on payday, before the next date is known.
+  //
+  // Only periods of at least three weeks count towards that average. A salary
+  // back-dated to balance the books, or a one-off correction, produces a short period
+  // that would otherwise drag the estimate down and claim the money must last ten
+  // days when it has to last a month.
+  const MIN_TYPICAL_DAYS = 21;
   const closedLengths: number[] = [];
   for (let i = 0; i + 1 < incomes.length; i++) {
-    closedLengths.push(Math.round((incomes[i + 1]!.occurredOn - incomes[i]!.occurredOn) / DAY));
+    const days = Math.round((incomes[i + 1]!.occurredOn - incomes[i]!.occurredOn) / DAY);
+    if (days >= MIN_TYPICAL_DAYS) closedLengths.push(days);
   }
   const typicalDays =
     closedLengths.length > 0

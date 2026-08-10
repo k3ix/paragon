@@ -81,6 +81,24 @@ describe("pay periods", () => {
     expect(periods[0]!.end).toBeGreaterThan(periods[0]!.start);
   });
 
+  it("ignores a short period when estimating how long the open one runs", () => {
+    // A salary back-dated to balance earlier spending makes a ten-day period. Taking
+    // it as typical would claim the current money has to last ten days.
+    salary("2026-07-31", "16280.40");
+    salary("2026-08-10", "28030.00");
+
+    expect(payPeriods(at(2026, 8, 11))[0]!.expectedDays).toBe(30);
+  });
+
+  it("estimates from full-length periods once there are some", () => {
+    salary("2026-06-10", "28000.00");
+    salary("2026-07-10", "28000.00");
+    salary("2026-08-09", "28000.00");
+
+    // Thirty days then thirty, so the open period is expected to run thirty.
+    expect(payPeriods(at(2026, 8, 11))[0]!.expectedDays).toBe(30);
+  });
+
   it("resolves a month id to calendar bounds", () => {
     const period = resolvePeriod("2026-08", at(2026, 8, 20));
 
