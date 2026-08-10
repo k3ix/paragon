@@ -8,3 +8,6 @@ dist/
 .env.local
 .DS_Store
 backups/
+
+# Screenshots from apps/web/scripts/shots.mjs — review artefacts, not source.
+apps/web/*.png

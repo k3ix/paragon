@@ -24,7 +24,7 @@ export function SetAside({ month }: { month: string }) {
           <p className="tnum mt-3 text-5xl leading-none font-semibold text-gain sm:text-6xl">
             {money(b.setAsideMinor)} zł
           </p>
-          <p className="tnum mt-2 text-sm text-ink-300">из {money(b.baseIncomeMinor ?? 0)} базы</p>
+          <p className="mt-2 text-sm text-ink-300">в день зарплаты, до трат</p>
         </>
       ) : (
         <>
@@ -38,6 +38,13 @@ export function SetAside({ month }: { month: string }) {
       )}
 
       <dl className="mt-6 max-w-sm space-y-2 text-sm">
+        {/* Shown even when the headline figure is still unknown: the salary is the
+            one input already declared, and hiding it reads as "not saved". */}
+        <Row
+          label="Зарплата"
+          value={b.baseIncomeMinor === null ? "—" : money(b.baseIncomeMinor)}
+          hint="база, без переработок"
+        />
         <Row
           label="Обязательное"
           value={money(b.committedMinor)}
@@ -63,9 +70,11 @@ export function SetAside({ month }: { month: string }) {
 function Row({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
     <div className="flex items-baseline justify-between gap-4">
-      <dt className="text-ink-300">
+      <dt className="text-ink-100">
         {label}
-        {hint && <span className="ml-2 hidden text-xs text-ink-700 sm:inline">{hint}</span>}
+        {/* The hint is dimmer than the label but still readable: ink-700 is a border
+            colour and disappears against the page. */}
+        {hint && <span className="ml-2 hidden text-xs text-ink-300 sm:inline">{hint}</span>}
       </dt>
       <dd className="tnum tabular-nums whitespace-nowrap">{value}</dd>
     </div>
