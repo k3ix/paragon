@@ -3,7 +3,13 @@ import { formatMinor } from "@paragon/shared";
 import { useUpdateTransaction, useDeleteTransaction } from "../api/queries";
 import { CategoryPicker } from "./CategoryPicker";
 
-type Line = { id: number; amountMinor: number; categoryPath: string | null; note: string | null };
+type Line = {
+  id: number;
+  amountMinor: number;
+  name: string | null;
+  categoryPath: string | null;
+  note: string | null;
+};
 
 type Row = {
   id: number;
@@ -27,6 +33,7 @@ export function TransactionEditor({ row, onClose }: { row: Row; onClose: () => v
     row.lines.map((l) => ({
       amount: formatMinor(l.amountMinor),
       category: l.categoryPath,
+      name: l.name ?? "",
       note: l.note ?? "",
     })),
   );
@@ -50,6 +57,7 @@ export function TransactionEditor({ row, onClose }: { row: Row; onClose: () => v
         lineItems: lines.map((l) => ({
           amount: l.amount,
           category: l.category ?? undefined,
+          name: l.name || undefined,
           note: l.note || undefined,
         })),
       },
@@ -84,7 +92,20 @@ export function TransactionEditor({ row, onClose }: { row: Row; onClose: () => v
       <p className="mt-4 text-xs uppercase tracking-widest text-ink-300">Строки</p>
       <div className="mt-2 space-y-2">
         {lines.map((line, index) => (
-          <div key={index} className="grid grid-cols-[1fr_100px_auto] items-center gap-2">
+          <div
+            key={index}
+            className="grid grid-cols-[1fr_100px_auto] items-center gap-2 sm:grid-cols-[1.4fr_1fr_100px_auto]"
+          >
+            {/* The name is what makes a receipt readable as a receipt. */}
+            <input
+              value={line.name}
+              placeholder="Название"
+              aria-label={`Название товара ${index + 1}`}
+              onChange={(e) =>
+                setLines(lines.map((l, i) => (i === index ? { ...l, name: e.target.value } : l)))
+              }
+              className="col-span-3 rounded border border-ink-700 bg-ink-800 px-2 py-1.5 text-sm text-ink-100 sm:col-span-1"
+            />
             <CategoryPicker
               value={line.category}
               onChange={(path) =>
@@ -116,7 +137,9 @@ export function TransactionEditor({ row, onClose }: { row: Row; onClose: () => v
       <div className="mt-3 flex items-center justify-between gap-3 text-sm">
         <button
           type="button"
-          onClick={() => setLines([...lines, { amount: "0.00", category: null, note: "" }])}
+          onClick={() =>
+            setLines([...lines, { amount: "0.00", category: null, name: "", note: "" }])
+          }
           className="rounded border border-ink-700 px-2 py-1 text-xs text-ink-300 hover:bg-ink-700"
         >
           Добавить строку

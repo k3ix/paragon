@@ -7,6 +7,8 @@ import { resolvePeriod } from "./periods";
 export type TransactionLine = {
   id: number;
   amountMinor: number;
+  /** What was bought. Null for lines recorded before names existed. */
+  name: string | null;
   categoryPath: string | null;
   note: string | null;
 };
@@ -105,6 +107,7 @@ export function listTransactions(filter: {
     list.push({
       id: line.id,
       amountMinor: line.amountMinor,
+      name: line.name,
       categoryPath: line.categoryId === null ? null : (paths.get(line.categoryId) ?? null),
       note: line.note,
     });

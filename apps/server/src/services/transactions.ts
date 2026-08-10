@@ -133,6 +133,7 @@ function addOne(item: AddTransactionInput): AddResult {
           transactionId: inserted.id,
           amountMinor: line.amountMinor,
           categoryId: line.categoryId,
+          name: line.name,
           note: line.note,
         })
         .run();
@@ -192,12 +193,14 @@ export function updateTransaction(
             {
               amountMinor: totalMinor,
               categoryId: existingLines[0]!.categoryId,
+              name: existingLines[0]!.name,
               note: existingLines[0]!.note,
             },
           ]
         : existingLines.map((l) => ({
             amountMinor: l.amountMinor,
             categoryId: l.categoryId,
+            name: l.name,
             note: l.note,
           }));
 
@@ -249,6 +252,7 @@ export function updateTransaction(
           transactionId: id,
           amountMinor: line.amountMinor,
           categoryId: line.categoryId,
+          name: line.name,
           note: line.note,
         })
         .run();

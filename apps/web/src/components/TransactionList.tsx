@@ -1,7 +1,14 @@
 import { useState, type ReactNode } from "react";
 import { money, dayHeading } from "../lib/format";
 
-type Line = { id: number; amountMinor: number; categoryPath: string | null; note: string | null };
+type Line = {
+  id: number;
+  amountMinor: number;
+  /** What was bought. Null for lines recorded before names existed. */
+  name: string | null;
+  categoryPath: string | null;
+  note: string | null;
+};
 
 /**
  * Mirrors `TransactionRow` from `apps/server/src/services/queries.ts`. The type is not
@@ -18,6 +25,21 @@ type Row = {
   note: string | null;
   lines: Line[];
 };
+
+/** A receipt's lines folded into one row per category, biggest first. */
+function byCategory(lines: Line[]): { label: string; amountMinor: number; count: number }[] {
+  const groups = new Map<string, { amountMinor: number; count: number }>();
+  for (const line of lines) {
+    const label = line.categoryPath ?? "Без категории";
+    const group = groups.get(label) ?? { amountMinor: 0, count: 0 };
+    group.amountMinor += line.amountMinor;
+    group.count += 1;
+    groups.set(label, group);
+  }
+  return [...groups.entries()]
+    .map(([label, g]) => ({ label, ...g }))
+    .sort((a, b) => b.amountMinor - a.amountMinor);
+}
 
 /**
  * Purchases grouped by day with a per-day subtotal.
@@ -124,21 +146,24 @@ export function TransactionList({
                   </span>
                 </button>
 
-                {/* Amounts appear only on split receipts; a single line just repeats
-                    the total already shown above it. */}
+                {/*
+                 * Collapsed, a receipt shows one line per category — ten items from
+                 * one Temu order read as noise, "Одежда 127.35" reads as a fact.
+                 * The items themselves are in the editor, one row each.
+                 */}
                 <ul className="pb-2">
-                  {row.lines.map((line) => (
+                  {byCategory(row.lines).map((group) => (
                     <li
-                      key={line.id}
+                      key={group.label}
                       className="flex items-baseline gap-3 pl-4 text-xs text-ink-300"
                     >
                       <span className="flex-1">
-                        {line.categoryPath ?? "Без категории"}
-                        {line.note && ` · ${line.note}`}
+                        {group.label}
+                        {group.count > 1 && ` · ${group.count} шт`}
                       </span>
                       {row.lines.length > 1 && (
                         <span className="tnum whitespace-nowrap tabular-nums">
-                          {money(line.amountMinor)}
+                          {money(group.amountMinor)}
                         </span>
                       )}
                     </li>

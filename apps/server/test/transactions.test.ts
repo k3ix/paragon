@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach } from "bun:test";
 import { resetTestDb, db, schema } from "./helpers/db";
 import { addTransactions } from "../src/services/transactions";
 import { createCategory, findCategoryByPath } from "../src/services/categories";
+import { listTransactions } from "../src/services/queries";
 
 beforeEach(() => {
   resetTestDb();
@@ -401,5 +402,45 @@ describe("addTransactions", () => {
 
     const merchant = db.select().from(schema.merchants).all()[0]!;
     expect(merchant.defaultCategoryId).toBeNull();
+  });
+});
+
+describe("line item names", () => {
+  it("keeps what was bought alongside its category", () => {
+    createCategory({ name: "Одежда" });
+    createCategory({ name: "Питомцы" });
+
+    const [result] = addTransactions([
+      {
+        date: "2026-08-10",
+        total: "20.00",
+        merchant: "Temu",
+        lineItems: [
+          { amount: "13.00", category: "Одежда", name: "Балетки белые" },
+          { amount: "7.00", category: "Питомцы", name: "Игрушка для кота" },
+        ],
+      },
+    ]);
+
+    const row = listTransactions({ month: "2026-08" }).rows.find((r) => r.id === result!.id)!;
+
+    expect(row.lines.map((l) => l.name)).toEqual(["Балетки белые", "Игрушка для кота"]);
+  });
+
+  it("leaves the name empty when none was given", () => {
+    createCategory({ name: "Еда" });
+
+    const [result] = addTransactions([
+      {
+        date: "2026-08-10",
+        total: "10.00",
+        merchant: "Żabka",
+        lineItems: [{ amount: "10.00", category: "Еда" }],
+      },
+    ]);
+
+    const row = listTransactions({ month: "2026-08" }).rows.find((r) => r.id === result!.id)!;
+
+    expect(row.lines[0]!.name).toBeNull();
   });
 });

@@ -43,7 +43,7 @@ function useInvalidateAll() {
   };
 }
 
-type LinePatch = { amount: string; category?: string; note?: string };
+type LinePatch = { amount: string; category?: string; name?: string; note?: string };
 
 export function useCategories() {
   return useQuery({

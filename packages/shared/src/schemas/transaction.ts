@@ -4,6 +4,7 @@ import { TRANSACTION_TYPES, SCOPES, SOURCES } from "../enums";
 export const lineItemSchema = z.object({
   amount: z.union([z.string(), z.number()]).describe('Line amount, e.g. "124.30" or "124,30"'),
   category: z.string().describe('Category path, e.g. "Food/Groceries"'),
+  name: z.string().optional().describe("What was bought, as printed on the receipt"),
   note: z.string().optional(),
 });
 

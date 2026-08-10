@@ -267,6 +267,7 @@ export const app = new Elysia({ prefix: "/api" })
           t.Object({
             amount: t.Union([t.String(), t.Number()]),
             category: t.Optional(t.String()),
+            name: t.Optional(t.String()),
             note: t.Optional(t.String()),
           }),
         ),

@@ -103,6 +103,9 @@ export const lineItems = sqliteTable(
       .notNull()
       .references(() => transactions.id, { onDelete: "cascade" }),
     amountMinor: integer("amount_minor").notNull(),
+    // What was bought, as printed on the receipt. Distinct from `note`, which is a
+    // remark about the purchase ("подарок на годовщину") rather than its name.
+    name: text("name"),
     categoryId: integer("category_id").references(() => categories.id, { onDelete: "restrict" }),
     // NULL means "inherit from the category"; true/false overrides it.
     isFixedOverride: integer("is_fixed_override", { mode: "boolean" }),

@@ -4,12 +4,14 @@ import { findCategoryByPath } from "./categories";
 export type ResolvedLine = {
   amountMinor: number;
   categoryId: number | null;
+  name: string | null;
   note: string | null;
 };
 
 export type LineInput = {
   amount: string | number;
   category?: string;
+  name?: string;
   note?: string;
 };
 
@@ -25,18 +27,18 @@ export function resolveLines(
 ): ResolvedLine[] {
   const source: LineInput[] = lines?.length
     ? lines
-    : [{ amount: fallbackTotal, category: undefined, note: undefined }];
+    : [{ amount: fallbackTotal, category: undefined, name: undefined, note: undefined }];
 
   return source.map((line) => {
     const amountMinor = parseAmountToMinor(line.amount);
     if (!line.category) {
-      return { amountMinor, categoryId: null, note: line.note ?? null };
+      return { amountMinor, categoryId: null, name: line.name ?? null, note: line.note ?? null };
     }
     const categoryId = findCategoryByPath(line.category);
     if (categoryId === null) {
       throw new Error(`Unknown category path: ${line.category}`);
     }
-    return { amountMinor, categoryId, note: line.note ?? null };
+    return { amountMinor, categoryId, name: line.name ?? null, note: line.note ?? null };
   });
 }
 
