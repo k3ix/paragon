@@ -168,9 +168,17 @@ export function getCategoryTreeBreakdown(month: string): CategoryTreeNode[] {
  * way a month is. The comparison window is the one immediately before it, of equal
  * length — for a pay period that is roughly the previous paycheque.
  */
-export function getCategoryTreeForRange(start: number, end: number): CategoryTreeNode[] {
+export function getCategoryTreeForRange(
+  start: number,
+  end: number,
+  previous?: { start: number; end: number },
+): CategoryTreeNode[] {
+  // Without an explicit comparison window, fall back to one of equal length. An open
+  // pay period ends at "now", so its own length is not a sensible yardstick — the
+  // caller passes the real previous period instead.
   const span = end - start;
-  return buildTree(start, end, start - span, start);
+  const before = previous ?? { start: start - span, end: start };
+  return buildTree(start, end, before.start, before.end);
 }
 
 function buildTree(

@@ -100,7 +100,17 @@ export const app = new Elysia({ prefix: "/api" })
     ({ query }) => {
       if (query.period) {
         const { start, end } = resolvePeriod(query.period);
-        return getCategoryTreeForRange(start, end);
+        // Compare against the whole previous pay period rather than a window of equal
+        // length: an open period is only as long as the days elapsed so far, and
+        // measuring it against the same few days a month ago says nothing.
+        const all = payPeriods();
+        const index = all.findIndex((p) => p.start === start);
+        const before = index >= 0 ? all[index + 1] : undefined;
+        // With no earlier period on record there is nothing to compare against, and
+        // an equal-length window ending at the period start would compare a few days
+        // of one paycheque against a few days of another. An empty window yields no
+        // deltas at all, which is the honest answer.
+        return getCategoryTreeForRange(start, end, before ?? { start, end: start });
       }
       return getCategoryTreeBreakdown(query.month!);
     },

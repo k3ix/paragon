@@ -15,53 +15,39 @@ export function SetAside({ month }: { month: string }) {
   if (!budget.data) return null;
   const b = budget.data;
 
+  /*
+   * Until three months of history exist there is no figure to show, and a giant dash
+   * above an empty breakdown was taking a third of the screen to say "not yet". While
+   * waiting, this collapses to a single line stating what is missing.
+   */
+  if (b.setAsideMinor === null) {
+    return (
+      <section className="border-t border-ink-700 pt-4 text-sm text-ink-300">
+        <span className="text-ink-100">Сколько откладывать</span>{" "}
+        {b.reason === "no-base-income"
+          ? "— добавьте зарплату в настройках."
+          : `— посчитаю через ${b.monthsNeeded} ${monthWord(b.monthsNeeded)}, нужно 3 месяца трат (записан ${b.monthsObserved}).`}
+      </section>
+    );
+  }
+
   return (
     <section>
-      <h2 className="text-xs uppercase tracking-widest text-ink-300">Отложить в этом месяце</h2>
+      <h2 className="text-xs uppercase tracking-widest text-ink-300">Откладывать в день зарплаты</h2>
 
-      {b.setAsideMinor !== null ? (
-        <>
-          <p className="tnum mt-3 text-5xl leading-none font-semibold text-gain sm:text-6xl">
-            {money(b.setAsideMinor)} zł
-          </p>
-          <p className="mt-2 text-sm text-ink-300">в день зарплаты, до трат</p>
-        </>
-      ) : (
-        <>
-          <p className="mt-3 text-5xl leading-none font-semibold text-ink-300 sm:text-6xl">—</p>
-          <p className="mt-3 max-w-md text-sm text-ink-300">
-            {b.reason === "no-base-income"
-              ? "Добавьте зарплату в настройках, чтобы посчитать."
-              : `Соберу за ${b.monthsNeeded} ${monthWord(b.monthsNeeded)}. Записано ${b.monthsObserved} из 3.`}
-          </p>
-        </>
-      )}
+      <p className="tnum mt-2 text-4xl leading-none font-semibold text-gain sm:text-5xl">
+        {money(b.setAsideMinor)} zł
+      </p>
 
-      <dl className="mt-6 max-w-sm space-y-2 text-sm">
-        {/* Shown even when the headline figure is still unknown: the salary is the
-            one input already declared, and hiding it reads as "not saved". */}
+      {/* Reached only once the figure exists, so every input below is known. */}
+      <dl className="mt-4 flex flex-wrap gap-x-8 gap-y-2 text-sm">
+        <Row label="Зарплата" value={money(b.baseIncomeMinor ?? 0)} hint="база" />
+        <Row label="− обязательное" value={money(b.committedMinor)} hint="" />
         <Row
-          label="Зарплата"
-          value={b.baseIncomeMinor === null ? "—" : money(b.baseIncomeMinor)}
-          hint="база, без переработок"
+          label="− на жизнь"
+          value={money(b.flexibleAverageMinor ?? 0)}
+          hint="среднее за 3 месяца"
         />
-        <Row
-          label="Обязательное"
-          value={money(b.committedMinor)}
-          hint="каждый месяц одно и то же"
-        />
-        <Row
-          label="На жизнь"
-          value={b.flexibleAverageMinor === null ? "…" : money(b.flexibleAverageMinor)}
-          hint={b.flexibleAverageMinor === null ? "нужно 3 месяца истории" : "среднее за 3 месяца"}
-        />
-        <div className="border-t border-ink-700 pt-2">
-          <Row
-            label="Остаётся"
-            value={b.setAsideMinor === null ? "—" : money(b.setAsideMinor)}
-            hint=""
-          />
-        </div>
       </dl>
     </section>
   );
@@ -69,14 +55,12 @@ export function SetAside({ month }: { month: string }) {
 
 function Row({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-4">
-      <dt className="text-ink-100">
+    <div className="flex items-baseline gap-2">
+      <dt className="text-ink-300">
         {label}
-        {/* The hint is dimmer than the label but still readable: ink-700 is a border
-            colour and disappears against the page. */}
-        {hint && <span className="ml-2 hidden text-xs text-ink-300 sm:inline">{hint}</span>}
+        {hint && <span className="ml-1 hidden text-xs text-ink-300 sm:inline">({hint})</span>}
       </dt>
-      <dd className="tnum tabular-nums whitespace-nowrap">{value}</dd>
+      <dd className="tnum whitespace-nowrap tabular-nums text-ink-100">{value}</dd>
     </div>
   );
 }

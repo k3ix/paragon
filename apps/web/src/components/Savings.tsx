@@ -10,11 +10,13 @@ type Summary = {
 };
 
 /**
- * What was put away this period, and what is left to live on.
+ * The two figures a household actually operates on: what was put away, and what is
+ * left to live on until the next paycheque.
  *
- * Deliberately just the amount: balances, interest and returns live in the broker's
- * app and the bank's, which do that properly. The only thing this needs to answer is
- * "how much did we manage to move out" — the outcome the whole app exists to improve.
+ * Side by side rather than stacked — they are the answer to one question ("how did we
+ * split this salary"), and stacking them buried both in a column of similar-looking
+ * text. Balances and returns live in the broker's app and the bank's; the only thing
+ * needed here is how much was moved out.
  */
 export function Savings({ summary }: { summary: Summary }) {
   const s = summary;
@@ -24,55 +26,76 @@ export function Savings({ summary }: { summary: Summary }) {
 
   return (
     <section>
-      <h2 className="text-xs uppercase tracking-widest text-ink-300">Отложено</h2>
-
-      <p className="tnum mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-        <span className="text-5xl leading-none font-semibold whitespace-nowrap text-gain sm:text-6xl">
-          {money(s.savedMinor)} zł
-        </span>
-        {rate !== null && <span className="text-sm text-ink-300">{rate}% от зарплаты</span>}
-      </p>
+      <div className="grid gap-8 sm:grid-cols-2">
+        <Headline
+          label="Отложено"
+          amount={s.savedMinor}
+          tone="gain"
+          caption={rate === null ? null : `${rate}% от зарплаты`}
+        />
+        <Headline
+          label="Осталось"
+          amount={s.leftMinor}
+          tone="plain"
+          caption={
+            s.perDayLeftMinor !== null && s.daysRemaining > 0
+              ? `${money(s.perDayLeftMinor)} zł в день · ${s.daysRemaining} дн.`
+              : null
+          }
+        />
+      </div>
 
       {/*
        * Three different events, so three different marks: salary arrives, savings
-       * move to an account you still own, spending is gone. Rendering the transfer
-       * as a grey minus filed it under "money lost", which is the opposite of what
-       * it is.
+       * move to an account you still own, spending is gone. A transfer rendered as a
+       * grey minus filed it under "money lost", which is the opposite of what it is.
        */}
-      <dl className="mt-6 max-w-sm space-y-2 text-sm">
+      <dl className="mt-8 flex flex-wrap gap-x-8 gap-y-2 border-t border-ink-700 pt-4 text-sm">
         <Row label="Пришло" value={`+${money(s.incomeMinor)}`} tone="gain" />
         <Row label="Отложено" value={`→ ${money(s.savedMinor)}`} tone="moved" />
         <Row label="Потрачено" value={`−${money(s.spentMinor)}`} tone="spent" />
-        <div className="border-t border-ink-700 pt-2">
-          <Row label="Осталось" value={money(s.leftMinor)} tone="total" />
-        </div>
       </dl>
-
-      {/* The figure behind "can we order sushi tonight". */}
-      {s.perDayLeftMinor !== null && s.daysRemaining > 0 && (
-        <p className="tnum mt-3 text-sm text-ink-300">
-          {money(s.perDayLeftMinor)} zł в день на оставшиеся {s.daysRemaining} дн.
-        </p>
-      )}
     </section>
   );
 }
 
-type Tone = "gain" | "moved" | "spent" | "total";
+function Headline({
+  label,
+  amount,
+  tone,
+  caption,
+}: {
+  label: string;
+  amount: number;
+  tone: "gain" | "plain";
+  caption: string | null;
+}) {
+  return (
+    <div>
+      <h2 className="text-xs uppercase tracking-widest text-ink-300">{label}</h2>
+      <p
+        className={`tnum mt-2 text-4xl leading-none font-semibold whitespace-nowrap sm:text-5xl ${
+          tone === "gain" ? "text-gain" : "text-ink-100"
+        }`}
+      >
+        {money(amount)} zł
+      </p>
+      {caption && <p className="tnum mt-2 text-sm text-ink-300">{caption}</p>}
+    </div>
+  );
+}
 
-const TONES: Record<Tone, string> = {
+const TONES = {
   gain: "text-gain",
-  // Savings keep the full-strength text colour: the money is still yours, just
-  // somewhere else.
+  // Savings keep the full-strength colour: the money is still yours, just elsewhere.
   moved: "text-ink-100",
   spent: "text-ink-300",
-  total: "font-semibold text-ink-100",
-};
+} as const;
 
-function Row({ label, value, tone }: { label: string; value: string; tone: Tone }) {
+function Row({ label, value, tone }: { label: string; value: string; tone: keyof typeof TONES }) {
   return (
-    <div className="flex items-baseline justify-between gap-4">
-      <dt className={tone === "total" ? "text-ink-100" : "text-ink-300"}>{label}</dt>
+    <div className="flex items-baseline gap-2">
+      <dt className="text-ink-300">{label}</dt>
       <dd className={`tnum whitespace-nowrap tabular-nums ${TONES[tone]}`}>{value}</dd>
     </div>
   );
