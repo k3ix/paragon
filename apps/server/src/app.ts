@@ -13,6 +13,7 @@ import {
 } from "./services/summary";
 import { getBudget } from "./services/budget";
 import { getPace } from "./services/pace";
+import { getSavings, getRunway } from "./services/savings";
 import {
   listCommitments,
   createCommitment,
@@ -88,6 +89,10 @@ export const app = new Elysia({ prefix: "/api" })
   .get("/pace", ({ query }) => getPace(query.month), { query: monthQuery })
 
   .get("/tree", ({ query }) => getCategoryTreeBreakdown(query.month), { query: monthQuery })
+
+  .get("/savings", ({ query }) => getSavings(query.month), { query: monthQuery })
+
+  .get("/runway", ({ query }) => getRunway(query.month), { query: monthQuery })
 
   .get("/commitments", () => listCommitments())
 

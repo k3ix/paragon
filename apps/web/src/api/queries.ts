@@ -35,6 +35,8 @@ function useInvalidateAll() {
       "pace",
       "tree",
       "commitments",
+      "savings",
+      "runway",
     ]) {
       qc.invalidateQueries({ queryKey: [key] });
     }
@@ -125,6 +127,28 @@ export function useTree(month: string) {
     queryKey: ["tree", month],
     queryFn: async () => {
       const { data, error } = await client.api.tree.get({ query: { month } });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useSavings(month: string) {
+  return useQuery({
+    queryKey: ["savings", month],
+    queryFn: async () => {
+      const { data, error } = await client.api.savings.get({ query: { month } });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useRunway(month: string) {
+  return useQuery({
+    queryKey: ["runway", month],
+    queryFn: async () => {
+      const { data, error } = await client.api.runway.get({ query: { month } });
       if (error) throw error;
       return data;
     },

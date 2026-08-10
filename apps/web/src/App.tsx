@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTransactions } from "./api/queries";
 import { currentMonth } from "./lib/format";
 import { MonthPicker } from "./components/MonthPicker";
+import { Savings } from "./components/Savings";
 import { SetAside } from "./components/SetAside";
 import { MonthPace } from "./components/MonthPace";
 import { SpendingTree } from "./components/SpendingTree";
@@ -58,6 +59,9 @@ export function App() {
 
       {view === "dashboard" && !transactions.isError && (
         <div className="mt-10 space-y-12">
+          {/* What actually went into savings comes before what the plan says should:
+              the fact is the outcome being optimised, the plan is advice about it. */}
+          <Savings month={month} />
           <SetAside month={month} />
           <MonthPace month={month} />
           <SpendingTree
