@@ -60,6 +60,35 @@ export const transactions = sqliteTable(
   ],
 );
 
+/**
+ * Amounts declared in advance rather than discovered from transactions: the base
+ * salary, rent, utilities. Rent is known before it is paid, so it cannot be derived
+ * from history — and the payday figure is worthless without it.
+ */
+export const commitments = sqliteTable(
+  "commitments",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    // "income" for the base salary, "expense" for rent and the like.
+    kind: text("kind").notNull(),
+    name: text("name").notNull(),
+    amountMinor: integer("amount_minor").notNull(),
+    // Links an expense commitment to the tree so its category is not double-counted
+    // in the flexible-spending average. NULL for income.
+    categoryId: integer("category_id").references(() => categories.id, {
+      onDelete: "set null",
+    }),
+    // "YYYY-MM" month strings, not Unix seconds: a commitment applies to a whole
+    // month, and storing an instant would force every read to decide which month a
+    // timestamp falls in.
+    activeFrom: text("active_from").notNull(),
+    // Inclusive. NULL means "still current".
+    activeTo: text("active_to"),
+    createdAt: integer("created_at").notNull().default(sql`(unixepoch())`),
+  },
+  (t) => [index("commitments_active_from_idx").on(t.activeFrom)],
+);
+
 export const lineItems = sqliteTable(
   "line_items",
   {

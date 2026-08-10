@@ -8,6 +8,13 @@
       "when": 1786276048794,
       "tag": "0000_striped_masked_marvel",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1786353681916,
+      "tag": "0001_tranquil_mandarin",
+      "breakpoints": true
     }
   ]
 }
