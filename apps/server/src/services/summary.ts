@@ -1,10 +1,15 @@
 import { and, eq, gte, lt, sql } from "drizzle-orm";
-import type { MonthSummary, TrendPoint, CategorySlice } from "@paragon/shared";
+import type {
+  MonthSummary,
+  TrendPoint,
+  CategorySlice,
+  CategoryTreeNode,
+} from "@paragon/shared";
 import { db } from "../db";
 import { transactions, lineItems, categories } from "../db/schema";
 import { monthBounds, shiftMonth } from "./month";
 
-export type { MonthSummary, TrendPoint, CategorySlice };
+export type { MonthSummary, TrendPoint, CategorySlice, CategoryTreeNode };
 
 /** Sum of transaction totals of one type within a month. Transfers are never counted. */
 function totalOfType(start: number, end: number, type: "expense" | "income"): number {
@@ -121,4 +126,114 @@ export function getCategoryBreakdown(month: string): CategorySlice[] {
       share: total === 0 ? 0 : Math.round((b.totalMinor / total) * 100),
     }))
     .sort((a, b) => b.totalMinor - a.totalMinor);
+}
+
+/** Spending per category id for one month, without any rollup. */
+function directSpendByCategory(month: string): Map<number | null, number> {
+  const { start, end } = monthBounds(month);
+  const rows = db
+    .select({
+      categoryId: lineItems.categoryId,
+      total: sql<number>`sum(${lineItems.amountMinor})`,
+    })
+    .from(lineItems)
+    .innerJoin(transactions, eq(transactions.id, lineItems.transactionId))
+    .where(
+      and(
+        eq(transactions.type, "expense"),
+        gte(transactions.occurredOn, start),
+        lt(transactions.occurredOn, end),
+      ),
+    )
+    .groupBy(lineItems.categoryId)
+    .all();
+
+  return new Map(rows.map((r) => [r.categoryId, r.total]));
+}
+
+/**
+ * Spending as a tree: every category with its children beneath it, each carrying its
+ * own subtotal plus everything filed under its descendants.
+ *
+ * Replaces the flat rollup on the dashboard. A parent-only view hides the split
+ * between, say, groceries and alcohol — which is the split worth seeing.
+ */
+export function getCategoryTreeBreakdown(month: string): CategoryTreeNode[] {
+  const current = directSpendByCategory(month);
+  const previous = directSpendByCategory(shiftMonth(month, -1));
+
+  const all = db
+    .select({ id: categories.id, name: categories.name, parentId: categories.parentId })
+    .from(categories)
+    .all();
+
+  const childrenOf = new Map<number | null, typeof all>();
+  for (const row of all) {
+    const siblings = childrenOf.get(row.parentId) ?? [];
+    siblings.push(row);
+    childrenOf.set(row.parentId, siblings);
+  }
+
+  const monthTotal = [...current.values()].reduce((a, b) => a + b, 0);
+
+  /**
+   * Builds a node and its subtree, returning null when nothing was spent anywhere in
+   * it. `seen` guards against a parent cycle, which would otherwise recurse forever.
+   */
+  function build(
+    row: { id: number; name: string },
+    prefix: string,
+    seen: Set<number>,
+  ): CategoryTreeNode | null {
+    if (seen.has(row.id)) return null;
+    const path = prefix ? `${prefix}/${row.name}` : row.name;
+    const descended = new Set(seen).add(row.id);
+
+    const children = (childrenOf.get(row.id) ?? [])
+      .map((child) => build(child, path, descended))
+      .filter((n): n is CategoryTreeNode => n !== null)
+      .sort((a, b) => b.totalMinor - a.totalMinor);
+
+    const totalMinor =
+      (current.get(row.id) ?? 0) + children.reduce((sum, c) => sum + c.totalMinor, 0);
+    const previousMinor =
+      (previous.get(row.id) ?? 0) + children.reduce((sum, c) => sum + c.previousMinor, 0);
+
+    if (totalMinor === 0 && previousMinor === 0) return null;
+
+    return {
+      categoryId: row.id,
+      name: row.name,
+      path,
+      totalMinor,
+      share: monthTotal === 0 ? 0 : Math.round((totalMinor / monthTotal) * 100),
+      previousMinor,
+      deltaMinor: totalMinor - previousMinor,
+      children,
+    };
+  }
+
+  const roots = (childrenOf.get(null) ?? [])
+    .map((row) => build(row, "", new Set()))
+    .filter((n): n is CategoryTreeNode => n !== null);
+
+  // Lines with no category belong to no branch, but hiding them would make the tree
+  // disagree with the month total.
+  const uncategorized = current.get(null) ?? 0;
+  const uncategorizedPrevious = previous.get(null) ?? 0;
+  if (uncategorized > 0 || uncategorizedPrevious > 0) {
+    roots.push({
+      categoryId: null,
+      name: "Без категории",
+      // Empty, so the purchase filter selects "no category" rather than a branch.
+      path: "",
+      totalMinor: uncategorized,
+      share: monthTotal === 0 ? 0 : Math.round((uncategorized / monthTotal) * 100),
+      previousMinor: uncategorizedPrevious,
+      deltaMinor: uncategorized - uncategorizedPrevious,
+      children: [],
+    });
+  }
+
+  return roots.sort((a, b) => b.totalMinor - a.totalMinor);
 }
