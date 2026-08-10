@@ -89,11 +89,11 @@ export function useBreakdown(month: string) {
   });
 }
 
-export function useTransactions(month: string, limit = 50) {
+export function useTransactions(period: string, limit = 100) {
   return useQuery({
-    queryKey: ["transactions", month, limit],
+    queryKey: ["transactions", period, limit],
     queryFn: async () => {
-      const { data, error } = await client.api.transactions.get({ query: { month, limit } });
+      const { data, error } = await client.api.transactions.get({ query: { period, limit } });
       if (error) throw error;
       return data;
     },
@@ -122,11 +122,11 @@ export function usePace(month: string) {
   });
 }
 
-export function useTree(month: string) {
+export function useTree(period: string) {
   return useQuery({
-    queryKey: ["tree", month],
+    queryKey: ["tree", period],
     queryFn: async () => {
-      const { data, error } = await client.api.tree.get({ query: { month } });
+      const { data, error } = await client.api.tree.get({ query: { period } });
       if (error) throw error;
       return data;
     },

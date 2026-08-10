@@ -11,6 +11,8 @@ type Line = { id: number; amountMinor: number; categoryPath: string | null; note
 type Row = {
   id: number;
   occurredOn: number;
+  /** "expense", "income" or "transfer" — each reads differently and signs differently. */
+  type: string;
   totalMinor: number;
   merchantRaw: string | null;
   note: string | null;
@@ -60,7 +62,7 @@ export function TransactionList({
   return (
     <section>
       <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h2 className="text-xs uppercase tracking-widest text-ink-300">Покупки</h2>
+        <h2 className="text-xs uppercase tracking-widest text-ink-300">Движение денег</h2>
         {filter && (
           <button
             type="button"
@@ -78,8 +80,14 @@ export function TransactionList({
         <div key={day} className="mt-6">
           <div className="flex items-baseline justify-between gap-3 border-b border-ink-700 pb-1">
             <h3 className="text-xs text-ink-300">{day}</h3>
+            {/* Only spending is subtotalled: adding a salary to a day's shopping
+                would produce a figure that means nothing. */}
             <span className="tnum text-xs whitespace-nowrap text-ink-300 tabular-nums">
-              {money(dayRows.reduce((sum, r) => sum + r.totalMinor, 0))}
+              {money(
+                dayRows
+                  .filter((r) => r.type === "expense")
+                  .reduce((sum, r) => sum + r.totalMinor, 0),
+              )}
             </span>
           </div>
 
@@ -92,9 +100,27 @@ export function TransactionList({
                   aria-expanded={openId === row.id}
                   className="flex w-full items-baseline gap-3 py-2 text-left text-sm hover:bg-ink-800/50"
                 >
-                  <span className="flex-1">{row.merchantRaw ?? "Без названия"}</span>
-                  <span className="tnum whitespace-nowrap tabular-nums">
-                    −{money(row.totalMinor)}
+                  <span className="flex-1">
+                    {row.merchantRaw ?? "Без названия"}
+                    {row.type === "transfer" && (
+                      <span className="ml-2 rounded bg-ink-800 px-1.5 py-0.5 text-xs text-ink-300">
+                        вывод
+                      </span>
+                    )}
+                  </span>
+                  {/* Income arrives, savings leave for an account you still own, and
+                      spending is gone. Three different events, three different marks. */}
+                  <span
+                    className={`tnum whitespace-nowrap tabular-nums ${
+                      row.type === "income"
+                        ? "text-gain"
+                        : row.type === "transfer"
+                          ? "text-ink-100"
+                          : ""
+                    }`}
+                  >
+                    {row.type === "income" ? "+" : row.type === "transfer" ? "→ " : "−"}
+                    {money(row.totalMinor)}
                   </span>
                 </button>
 

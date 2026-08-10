@@ -2,6 +2,7 @@ import { and, desc, eq, gte, lt, sql, inArray } from "drizzle-orm";
 import { db } from "../db";
 import { transactions, lineItems, categories } from "../db/schema";
 import { monthBounds } from "./month";
+import { resolvePeriod } from "./periods";
 
 export type TransactionLine = {
   id: number;
@@ -47,12 +48,20 @@ function categoryPaths(): Map<number, string> {
 
 export function listTransactions(filter: {
   month?: string;
+  /** A period id — "2026-08" or "pay-2026-08-10". Takes precedence over `month`. */
+  period?: string;
+  /** "Now", for resolving an open pay period. Injected by tests. */
+  now?: number;
   type?: string;
   limit?: number;
   offset?: number;
 }): { rows: TransactionRow[]; total: number } {
   const conditions = [];
-  if (filter.month) {
+  if (filter.period) {
+    const { start, end } = resolvePeriod(filter.period, filter.now);
+    conditions.push(gte(transactions.occurredOn, start));
+    conditions.push(lt(transactions.occurredOn, end));
+  } else if (filter.month) {
     const { start, end } = monthBounds(filter.month);
     conditions.push(gte(transactions.occurredOn, start));
     conditions.push(lt(transactions.occurredOn, end));

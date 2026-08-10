@@ -10,10 +10,11 @@ import {
   getMonthlyTrend,
   getCategoryBreakdown,
   getCategoryTreeBreakdown,
+  getCategoryTreeForRange,
 } from "./services/summary";
 import { getBudget } from "./services/budget";
 import { getPace } from "./services/pace";
-import { payPeriods } from "./services/periods";
+import { payPeriods, resolvePeriod } from "./services/periods";
 import { getPeriodSummary } from "./services/period-summary";
 import {
   listCommitments,
@@ -33,6 +34,9 @@ import { createBackup, pruneBackups } from "./services/backup";
 // because 2026-13 matches this pattern but is not a month.
 const monthPattern = "^\\d{4}-\\d{2}$";
 const monthQuery = t.Object({ month: t.String({ pattern: monthPattern }) });
+
+// A period is either a calendar month or a pay period keyed by its start date.
+const periodPattern = "^(\\d{4}-\\d{2}|pay-\\d{4}-\\d{2}-\\d{2})$";
 
 export const app = new Elysia({ prefix: "/api" })
   /*
@@ -89,7 +93,24 @@ export const app = new Elysia({ prefix: "/api" })
 
   .get("/pace", ({ query }) => getPace(query.month), { query: monthQuery })
 
-  .get("/tree", ({ query }) => getCategoryTreeBreakdown(query.month), { query: monthQuery })
+  // Accepts a period id so the tree covers the same window as the figures above it —
+  // otherwise the page shows "spent 0" beside a tree full of the previous paycheque.
+  .get(
+    "/tree",
+    ({ query }) => {
+      if (query.period) {
+        const { start, end } = resolvePeriod(query.period);
+        return getCategoryTreeForRange(start, end);
+      }
+      return getCategoryTreeBreakdown(query.month!);
+    },
+    {
+      query: t.Object({
+        month: t.Optional(t.String({ pattern: monthPattern })),
+        period: t.Optional(t.String({ pattern: periodPattern })),
+      }),
+    },
+  )
 
   // Pay periods available to switch between, newest first. Empty until a salary is
   // recorded, which is what the UI uses to decide whether to offer the toggle.
@@ -113,7 +134,7 @@ export const app = new Elysia({ prefix: "/api" })
 
   // Accepts either a month ("2026-08") or a pay period start ("2026-08-10").
   .get("/period-summary", ({ query }) => getPeriodSummary(query.period), {
-    query: t.Object({ period: t.String({ pattern: "^(\\d{4}-\\d{2}|pay-\\d{4}-\\d{2}-\\d{2})$" }) }),
+    query: t.Object({ period: t.String({ pattern: periodPattern }) }),
     // `period.id` needs the same protection from date coercion as /periods above.
     response: t.Object({
       period: t.Object({
@@ -189,6 +210,7 @@ export const app = new Elysia({ prefix: "/api" })
     ({ query }) =>
       listTransactions({
         month: query.month,
+        period: query.period,
         type: query.type,
         limit: query.limit,
         offset: query.offset,
@@ -196,6 +218,7 @@ export const app = new Elysia({ prefix: "/api" })
     {
       query: t.Object({
         month: t.Optional(t.String({ pattern: monthPattern })),
+        period: t.Optional(t.String({ pattern: periodPattern })),
         type: t.Optional(t.String()),
         limit: t.Optional(t.Number({ minimum: 1, maximum: 500 })),
         offset: t.Optional(t.Number({ minimum: 0 })),

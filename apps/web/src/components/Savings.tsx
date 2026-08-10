@@ -33,12 +33,18 @@ export function Savings({ summary }: { summary: Summary }) {
         {rate !== null && <span className="text-sm text-ink-300">{rate}% от зарплаты</span>}
       </p>
 
+      {/*
+       * Three different events, so three different marks: salary arrives, savings
+       * move to an account you still own, spending is gone. Rendering the transfer
+       * as a grey minus filed it under "money lost", which is the opposite of what
+       * it is.
+       */}
       <dl className="mt-6 max-w-sm space-y-2 text-sm">
-        <Row label="Пришло" value={money(s.incomeMinor)} />
-        <Row label="Отложено" value={`−${money(s.savedMinor)}`} />
-        <Row label="Потрачено" value={`−${money(s.spentMinor)}`} />
+        <Row label="Пришло" value={`+${money(s.incomeMinor)}`} tone="gain" />
+        <Row label="Отложено" value={`→ ${money(s.savedMinor)}`} tone="moved" />
+        <Row label="Потрачено" value={`−${money(s.spentMinor)}`} tone="spent" />
         <div className="border-t border-ink-700 pt-2">
-          <Row label="Осталось" value={money(s.leftMinor)} strong />
+          <Row label="Осталось" value={money(s.leftMinor)} tone="total" />
         </div>
       </dl>
 
@@ -52,15 +58,22 @@ export function Savings({ summary }: { summary: Summary }) {
   );
 }
 
-function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+type Tone = "gain" | "moved" | "spent" | "total";
+
+const TONES: Record<Tone, string> = {
+  gain: "text-gain",
+  // Savings keep the full-strength text colour: the money is still yours, just
+  // somewhere else.
+  moved: "text-ink-100",
+  spent: "text-ink-300",
+  total: "font-semibold text-ink-100",
+};
+
+function Row({ label, value, tone }: { label: string; value: string; tone: Tone }) {
   return (
     <div className="flex items-baseline justify-between gap-4">
-      <dt className={strong ? "text-ink-100" : "text-ink-300"}>{label}</dt>
-      <dd
-        className={`tnum whitespace-nowrap tabular-nums ${strong ? "font-semibold" : "text-ink-300"}`}
-      >
-        {value}
-      </dd>
+      <dt className={tone === "total" ? "text-ink-100" : "text-ink-300"}>{label}</dt>
+      <dd className={`tnum whitespace-nowrap tabular-nums ${TONES[tone]}`}>{value}</dd>
     </div>
   );
 }

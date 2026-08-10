@@ -128,9 +128,8 @@ export function getCategoryBreakdown(month: string): CategorySlice[] {
     .sort((a, b) => b.totalMinor - a.totalMinor);
 }
 
-/** Spending per category id for one month, without any rollup. */
-function directSpendByCategory(month: string): Map<number | null, number> {
-  const { start, end } = monthBounds(month);
+/** Spending per category id in a window, without any rollup. */
+function directSpendByCategory(start: number, end: number): Map<number | null, number> {
   const rows = db
     .select({
       categoryId: lineItems.categoryId,
@@ -159,8 +158,29 @@ function directSpendByCategory(month: string): Map<number | null, number> {
  * between, say, groceries and alcohol — which is the split worth seeing.
  */
 export function getCategoryTreeBreakdown(month: string): CategoryTreeNode[] {
-  const current = directSpendByCategory(month);
-  const previous = directSpendByCategory(shiftMonth(month, -1));
+  const now = monthBounds(month);
+  const before = monthBounds(shiftMonth(month, -1));
+  return buildTree(now.start, now.end, before.start, before.end);
+}
+
+/**
+ * The same tree over an arbitrary window, so a pay period can be reported the same
+ * way a month is. The comparison window is the one immediately before it, of equal
+ * length — for a pay period that is roughly the previous paycheque.
+ */
+export function getCategoryTreeForRange(start: number, end: number): CategoryTreeNode[] {
+  const span = end - start;
+  return buildTree(start, end, start - span, start);
+}
+
+function buildTree(
+  start: number,
+  end: number,
+  previousStart: number,
+  previousEnd: number,
+): CategoryTreeNode[] {
+  const current = directSpendByCategory(start, end);
+  const previous = directSpendByCategory(previousStart, previousEnd);
 
   const all = db
     .select({ id: categories.id, name: categories.name, parentId: categories.parentId })
@@ -199,7 +219,9 @@ export function getCategoryTreeBreakdown(month: string): CategoryTreeNode[] {
     const previousMinor =
       (previous.get(row.id) ?? 0) + children.reduce((sum, c) => sum + c.previousMinor, 0);
 
-    if (totalMinor === 0 && previousMinor === 0) return null;
+    // A category with nothing spent in this window has no row: showing "0.00" beside
+    // a delta against the previous window is noise, not information.
+    if (totalMinor === 0) return null;
 
     return {
       categoryId: row.id,
@@ -221,7 +243,7 @@ export function getCategoryTreeBreakdown(month: string): CategoryTreeNode[] {
   // disagree with the month total.
   const uncategorized = current.get(null) ?? 0;
   const uncategorizedPrevious = previous.get(null) ?? 0;
-  if (uncategorized > 0 || uncategorizedPrevious > 0) {
+  if (uncategorized > 0) {
     roots.push({
       categoryId: null,
       name: "Без категории",

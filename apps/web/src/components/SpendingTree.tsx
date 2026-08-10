@@ -11,22 +11,22 @@ import { money } from "../lib/format";
  * reads as rows jittering sideways.
  */
 export function SpendingTree({
-  month,
+  period,
   selectedPath,
   onSelect,
 }: {
-  month: string;
+  period: string;
   selectedPath: string | null;
   onSelect: (path: string, name: string) => void;
 }) {
-  const tree = useTree(month);
+  const tree = useTree(period);
   if (!tree.data) return null;
 
   if (tree.data.length === 0) {
     return (
       <section>
         <h2 className="text-xs uppercase tracking-widest text-ink-300">Куда ушли деньги</h2>
-        <p className="mt-4 text-sm text-ink-300">В этом месяце ещё ничего не записано.</p>
+        <p className="mt-4 text-sm text-ink-300">За этот период ещё ничего не записано.</p>
       </section>
     );
   }

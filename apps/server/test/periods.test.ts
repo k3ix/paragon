@@ -3,6 +3,8 @@ import { resetTestDb } from "./helpers/db";
 import { createCategory } from "../src/services/categories";
 import { addTransactions } from "../src/services/transactions";
 import { payPeriods, resolvePeriod } from "../src/services/periods";
+import { listTransactions } from "../src/services/queries";
+import { getCategoryTreeForRange } from "../src/services/summary";
 import { getPeriodSummary } from "../src/services/period-summary";
 
 beforeEach(() => {
@@ -170,6 +172,34 @@ describe("period summary", () => {
 
     expect(summary.daysElapsed).toBe(5);
     expect(summary.perDayMinor).toBe(10000);
+  });
+
+  it("filters the transaction list to the period", () => {
+    createCategory({ name: "Еда" });
+    salary("2026-07-10", "28000.00");
+    expense("2026-08-02", "900.00", "Еда");
+    salary("2026-08-10", "28030.00");
+    expense("2026-08-12", "100.00", "Еда");
+
+    const rows = listTransactions({ period: "pay-2026-08-10", now: at(2026, 8, 20) }).rows;
+
+    // The salary that opens the period plus the one purchase after it.
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.type).sort()).toEqual(["expense", "income"]);
+  });
+
+  it("filters the category tree to the period", () => {
+    createCategory({ name: "Еда" });
+    salary("2026-07-10", "28000.00");
+    expense("2026-08-02", "900.00", "Еда");
+    salary("2026-08-10", "28030.00");
+    expense("2026-08-12", "100.00", "Еда");
+
+    const { start, end } = resolvePeriod("pay-2026-08-10", at(2026, 8, 20));
+    const tree = getCategoryTreeForRange(start, end);
+
+    // Only the 100.00 spent after the new salary, not August's earlier 900.00.
+    expect(tree.find((n) => n.name === "Еда")!.totalMinor).toBe(10000);
   });
 
   it("still reports a calendar month", () => {

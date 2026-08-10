@@ -32,7 +32,7 @@ export function App() {
 
   const summary = usePeriodSummary(active);
   const budget = useBudget(month);
-  const transactions = useTransactions(month);
+  const transactions = useTransactions(active);
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
@@ -84,7 +84,7 @@ export function App() {
             <MonthPace summary={summary.data} budgetMinor={budget.data?.flexibleAverageMinor ?? null} />
           )}
           <SpendingTree
-            month={month}
+            period={active}
             selectedPath={filter?.path ?? null}
             onSelect={(path, name) => setFilter((f) => (f?.path === path ? null : { path, name }))}
           />
