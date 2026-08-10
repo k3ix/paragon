@@ -25,7 +25,7 @@ export function SetAside({ month }: { month: string }) {
       <section className="border-t border-ink-700 pt-4 text-sm text-ink-300">
         <span className="text-ink-100">Сколько откладывать</span>{" "}
         {b.reason === "no-base-income"
-          ? "— добавьте зарплату в настройках."
+          ? "— за этот месяц зарплата не задана. Задаётся в настройках."
           : `— посчитаю через ${b.monthsNeeded} ${monthWord(b.monthsNeeded)}, нужно 3 месяца трат (записан ${b.monthsObserved}).`}
       </section>
     );
