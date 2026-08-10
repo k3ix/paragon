@@ -100,16 +100,17 @@ export function TransactionList({
 
       {[...byDay.entries()].map(([day, dayRows]) => (
         <div key={day} className="mt-6">
-          <div className="flex items-baseline justify-between gap-3 border-b border-ink-700 pb-1">
-            <h3 className="text-xs text-ink-300">{day}</h3>
+          <div className="flex items-baseline justify-between gap-3 border-b border-ink-700 pb-1.5">
+            <h3 className="text-xs uppercase tracking-wider text-ink-500">{day}</h3>
             {/* Only spending is subtotalled: adding a salary to a day's shopping
                 would produce a figure that means nothing. */}
-            <span className="tnum text-xs whitespace-nowrap text-ink-300 tabular-nums">
+            <span className="tnum text-xs whitespace-nowrap text-ink-500 tabular-nums">
               {money(
                 dayRows
                   .filter((r) => r.type === "expense")
                   .reduce((sum, r) => sum + r.totalMinor, 0),
-              )}
+              )}{" "}
+              zł
             </span>
           </div>
 
@@ -125,7 +126,7 @@ export function TransactionList({
                   <span className="flex-1">
                     {row.merchantRaw ?? "Без названия"}
                     {row.type === "transfer" && (
-                      <span className="ml-2 rounded bg-ink-800 px-1.5 py-0.5 text-xs text-ink-300">
+                      <span className="ml-2 rounded bg-gain/10 px-1.5 py-0.5 text-xs text-gain">
                         вывод
                       </span>
                     )}
@@ -142,7 +143,7 @@ export function TransactionList({
                     }`}
                   >
                     {row.type === "income" ? "+" : row.type === "transfer" ? "→ " : "−"}
-                    {money(row.totalMinor)}
+                    {money(row.totalMinor)} zł
                   </span>
                 </button>
 
@@ -155,7 +156,7 @@ export function TransactionList({
                   {byCategory(row.lines).map((group) => (
                     <li
                       key={group.label}
-                      className="flex items-baseline gap-3 pl-4 text-xs text-ink-300"
+                      className="flex items-baseline gap-3 pl-4 text-[0.8125rem] text-ink-300"
                     >
                       <span className="flex-1">
                         {group.label}

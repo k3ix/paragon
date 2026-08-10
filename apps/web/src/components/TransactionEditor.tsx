@@ -68,7 +68,7 @@ export function TransactionEditor({ row, onClose }: { row: Row; onClose: () => v
   const error = update.error ?? remove.error;
 
   return (
-    <div className="border-l-2 border-ink-500 bg-ink-800/40 px-4 py-4">
+    <div className="rounded border border-ink-700 bg-ink-800/30 px-3 py-3">
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="text-xs text-ink-300">
           Дата
@@ -150,8 +150,8 @@ export function TransactionEditor({ row, onClose }: { row: Row; onClose: () => v
          */}
         <span className={`tnum text-right text-xs ${balanced ? "text-gain" : "text-flag"}`}>
           {balanced
-            ? `Сходится: ${formatMinor(row.totalMinor)}`
-            : `Строки дают ${formatMinor(totalMinor)}, в чеке ${formatMinor(row.totalMinor)}`}
+            ? `Сходится: ${formatMinor(row.totalMinor)} zł`
+            : `Строки дают ${formatMinor(totalMinor)} zł, в чеке ${formatMinor(row.totalMinor)} zł`}
         </span>
       </div>
 
@@ -171,14 +171,14 @@ export function TransactionEditor({ row, onClose }: { row: Row; onClose: () => v
           type="button"
           onClick={save}
           disabled={update.isPending}
-          className="rounded bg-gain px-3 py-1.5 text-sm font-medium text-ink-900 disabled:opacity-50"
+          className="rounded bg-ink-100 px-3 py-1.5 text-xs font-medium text-ink-900 disabled:opacity-50"
         >
           {update.isPending ? "Сохраняю…" : "Сохранить"}
         </button>
         <button
           type="button"
           onClick={onClose}
-          className="rounded border border-ink-700 px-3 py-1.5 text-sm text-ink-300 hover:bg-ink-700"
+          className="rounded border border-ink-700 px-3 py-1.5 text-xs text-ink-300 hover:bg-ink-700"
         >
           Отмена
         </button>
@@ -186,7 +186,7 @@ export function TransactionEditor({ row, onClose }: { row: Row; onClose: () => v
           type="button"
           onClick={() => remove.mutate(row.id, { onSuccess: onClose })}
           disabled={remove.isPending}
-          className="ml-auto rounded px-3 py-1.5 text-sm text-drain hover:bg-drain/10 disabled:opacity-50"
+          className="ml-auto rounded px-3 py-1.5 text-xs text-drain hover:bg-drain/10 disabled:opacity-50"
         >
           Удалить
         </button>
