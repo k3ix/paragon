@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "../db";
 import { transactions } from "../db/schema";
 import { monthBounds, parseMonth } from "./month";
@@ -79,12 +79,17 @@ export function monthPeriod(month: string, now: number): Period {
  *
  * Salary arrives as a single transaction, so consecutive income rows are genuinely
  * separate paycheques and need no grouping.
+ *
+ * Only income flagged startsPeriod counts. Money earned earlier that merely surfaced
+ * now — a wedding gift spent abroad, a refund, a returned deposit — is income, but
+ * opening a period on it cuts the month in half and reports the real paycheque as
+ * though it never arrived.
  */
 export function payPeriods(now: number = Math.floor(Date.now() / 1000)): Period[] {
   const incomes = db
     .select({ occurredOn: transactions.occurredOn })
     .from(transactions)
-    .where(eq(transactions.type, "income"))
+    .where(and(eq(transactions.type, "income"), eq(transactions.startsPeriod, true)))
     .orderBy(asc(transactions.occurredOn))
     .all();
 

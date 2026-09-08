@@ -54,6 +54,31 @@ describe("pay periods", () => {
     expect(periods[1]!.end).toBe(periods[0]!.start);
   });
 
+  it("does not start a period on income that only surfaced now", () => {
+    salary("2026-07-10", "28000.00");
+    salary("2026-08-05", "28030.00");
+    // A wedding gift kept in cash, spent on a trip. Income, but earned long ago:
+    // opening a period here would cut the month in two and report the paycheque
+    // as though it had never arrived.
+    addTransactions([
+      {
+        date: "2026-08-16",
+        total: "2152.30",
+        type: "income",
+        merchant: "Наличные",
+        startsPeriod: false,
+      },
+    ]);
+
+    const periods = payPeriods(at(2026, 8, 20));
+
+    expect(periods).toHaveLength(2);
+    expect(periods[0]!.id).toBe("pay-2026-08-05");
+    // The gift falls inside the August period rather than splitting it.
+    expect(periods[0]!.start).toBeLessThan(at(2026, 8, 16));
+    expect(periods[0]!.end).toBeGreaterThan(at(2026, 8, 16));
+  });
+
   it("marks only the newest period open", () => {
     salary("2026-07-10", "28000.00");
     salary("2026-08-05", "28030.00");

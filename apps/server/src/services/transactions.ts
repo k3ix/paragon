@@ -122,6 +122,7 @@ function addOne(item: AddTransactionInput): AddResult {
         scope: item.scope ?? null,
         account: item.account ?? null,
         note: item.note ?? null,
+        startsPeriod: item.startsPeriod ?? true,
         dedupHash,
       })
       .returning({ id: transactions.id })

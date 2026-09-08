@@ -20,6 +20,13 @@ export const addTransactionSchema = z.object({
   source: z.enum(SOURCES).optional(),
   account: z.string().optional(),
   note: z.string().optional(),
+  startsPeriod: z
+    .boolean()
+    .optional()
+    .describe(
+      "Income only. False when the money was earned earlier and merely surfaced now — " +
+        "a gift, a refund, a returned deposit. Such income must not open a new pay period.",
+    ),
   lineItems: z
     .array(lineItemSchema)
     .optional()

@@ -56,6 +56,12 @@ export const transactions = sqliteTable(
     scope: text("scope"),
     account: text("account"),
     note: text("note"),
+    // Whether this income opens a new pay period. Only a paycheque does. Money that
+    // was earned earlier and merely surfaced now — a gift spent on a trip, a refund,
+    // a deposit coming back — is income all the same, but starting a period on it
+    // splits the month in two and reports the paycheque as if it had never arrived.
+    // Ignored for expenses and transfers.
+    startsPeriod: integer("starts_period", { mode: "boolean" }).notNull().default(true),
     dedupHash: text("dedup_hash").notNull(),
     createdAt: integer("created_at").notNull().default(sql`(unixepoch())`),
   },
