@@ -27,6 +27,26 @@ export const addTransactionSchema = z.object({
       "Income only. False when the money was earned earlier and merely surfaced now — " +
         "a gift, a refund, a returned deposit. Such income must not open a new pay period.",
     ),
+  fromAccountId: z
+    .number()
+    .optional()
+    .describe(
+      "Tracked account the money left. Omit for a card purchase — everyday cards are not tracked.",
+    ),
+  toAccountId: z
+    .number()
+    .optional()
+    .describe(
+      "Tracked account the money arrived in: a transfer to savings, or interest credited there.",
+    ),
+  fromHoldingId: z
+    .number()
+    .optional()
+    .describe("Holding the money came out of, such as a bond redeemed or shares sold."),
+  toHoldingId: z
+    .number()
+    .optional()
+    .describe("Holding the money went into, such as a purchase of shares."),
   lineItems: z
     .array(lineItemSchema)
     .optional()

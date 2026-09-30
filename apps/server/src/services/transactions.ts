@@ -4,7 +4,12 @@ import { db } from "../db";
 import { transactions, lineItems, merchants } from "../db/schema";
 import { parseAmountToMinor } from "../money";
 import { normalizeMerchant, computeDedupHash } from "./dedup";
-import { resolveLines, assertLinesMatchTotal, type LineInput } from "./invariants";
+import {
+  resolveLines,
+  assertLinesMatchTotal,
+  checkAssetEndpoints,
+  type LineInput,
+} from "./invariants";
 import { listTransactions, type TransactionRow } from "./queries";
 
 export type { AddTransactionInput };
@@ -81,6 +86,7 @@ function addOne(item: AddTransactionInput): AddResult {
   // Resolve categories before opening the transaction so a bad path fails cleanly.
   const resolved = resolveLines(item.lineItems, item.total);
   assertLinesMatchTotal(resolved, totalMinor);
+  checkAssetEndpoints(item);
 
   const merchantRaw = item.merchant ?? null;
   const merchantNorm = merchantRaw ? normalizeMerchant(merchantRaw) : "";
@@ -123,6 +129,10 @@ function addOne(item: AddTransactionInput): AddResult {
         account: item.account ?? null,
         note: item.note ?? null,
         startsPeriod: item.startsPeriod ?? true,
+        fromAccountId: item.fromAccountId ?? null,
+        toAccountId: item.toAccountId ?? null,
+        fromHoldingId: item.fromHoldingId ?? null,
+        toHoldingId: item.toHoldingId ?? null,
         dedupHash,
       })
       .returning({ id: transactions.id })
