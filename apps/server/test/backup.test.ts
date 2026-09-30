@@ -1,10 +1,10 @@
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
-import { existsSync, rmSync, mkdirSync } from "node:fs";
+import { existsSync, rmSync, mkdirSync, utimesSync } from "node:fs";
 import { Database } from "bun:sqlite";
 import { resetTestDb } from "./helpers/db";
 import { createCategory } from "../src/services/categories";
 import { addTransactions } from "../src/services/transactions";
-import { createBackup, listBackups, pruneBackups } from "../src/services/backup";
+import { createBackup, listBackups, pruneBackups, backupIfStale } from "../src/services/backup";
 
 const DIR = "/tmp/paragon-backup-test";
 
@@ -132,5 +132,44 @@ describe("pruneBackups", () => {
   it("refuses to keep zero", () => {
     // Pruning to nothing is never intended and would delete every backup.
     expect(() => pruneBackups(0, DIR)).toThrow(/keep/i);
+  });
+});
+
+describe("backupIfStale", () => {
+  it("skips a backup when a recent one already exists", () => {
+    const first = backupIfStale(24, DIR);
+    expect(first).not.toBeNull();
+    const second = backupIfStale(24, DIR);
+    expect(second).toBeNull();
+    expect(listBackups(DIR)).toHaveLength(1);
+  });
+
+  it("writes one when the newest copy is old enough", () => {
+    const first = backupIfStale(24, DIR);
+    expect(first).not.toBeNull();
+
+    // Age the existing copy by a day. Backup names carry one-second resolution, so
+    // without moving it back in time a second copy would land on the same filename.
+    const dayAgo = new Date(Date.now() - 25 * 3600 * 1000);
+    utimesSync(first as string, dayAgo, dayAgo);
+
+    expect(backupIfStale(24, DIR)).not.toBeNull();
+    expect(listBackups(DIR)).toHaveLength(2);
+  });
+
+  it("writes the first one when nothing exists yet", () => {
+    expect(listBackups(DIR)).toHaveLength(0);
+    expect(backupIfStale(24, DIR)).not.toBeNull();
+  });
+});
+
+describe("automatic backup on write", () => {
+  it("does not write into the real backup directory from a test run", () => {
+    // DB_PATH is set by test/helpers/db, which is what marks this as not-live.
+    expect(process.env.DB_PATH).toBeTruthy();
+
+    const before = listBackups().length;
+    seed();
+    expect(listBackups()).toHaveLength(before);
   });
 });

@@ -11,6 +11,7 @@ import {
   type LineInput,
 } from "./invariants";
 import { listTransactions, type TransactionRow } from "./queries";
+import { backupIfStale } from "./backup";
 
 export type { AddTransactionInput };
 
@@ -76,6 +77,22 @@ function upsertMerchant(
  *   2. a repeat of the same receipt returns already_exists instead of inserting.
  */
 export function addTransactions(items: AddTransactionInput[]): AddResult[] {
+  // Once a day, before anything is written. Backups used to be taken by hand, which
+  // held while the code was being written and stopped the moment it wasn't — the newest
+  // copy was once seven weeks old. A failure here is swallowed on purpose: losing
+  // today's receipt to a full disk would be worse than the missing copy.
+  //
+  // Skipped when DB_PATH is set, which means this is not the live database. A test run
+  // would otherwise drop a copy of its own fixtures into backups/ and, worse, reset the
+  // age clock so the next real recording sees a fresh backup and skips its own.
+  if (!process.env.DB_PATH) {
+    try {
+      backupIfStale(24);
+    } catch (error) {
+      console.warn("Automatic backup failed, recording anyway:", error);
+    }
+  }
+
   return items.map((item) => addOne(item));
 }
 
