@@ -107,13 +107,21 @@ export function updateAccount(id: number, input: Partial<AccountInput>): Account
   const row = db
     .update(accounts)
     .set({
-      name: input.name ?? existing.name,
+      name: input.name !== undefined ? input.name : existing.name,
       balanceMinor: input.balanceMinor ?? existing.balanceMinor,
       openingMinor: input.openingMinor ?? existing.openingMinor,
       openedOn: input.openedOn !== undefined ? input.openedOn : existing.openedOn,
       rateBp: input.rateBp !== undefined ? input.rateBp : existing.rateBp,
       promoUntil: input.promoUntil !== undefined ? input.promoUntil : existing.promoUntil,
-      archivedAt: input.archived ? Math.floor(Date.now() / 1000) : existing.archivedAt,
+      // Three states, not two: absent leaves it alone, true archives, false restores.
+      // Collapsing false into "absent" would make archiving one-way, and undoing a
+      // mistaken archive would mean editing SQLite by hand.
+      archivedAt:
+        input.archived === undefined
+          ? existing.archivedAt
+          : input.archived
+            ? Math.floor(Date.now() / 1000)
+            : null,
     })
     .where(eq(accounts.id, id))
     .returning()

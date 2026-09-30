@@ -1,7 +1,7 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { AddTransactionInput } from "@paragon/shared";
 import { db } from "../db";
-import { transactions, lineItems, merchants } from "../db/schema";
+import { transactions, lineItems, merchants, holdings } from "../db/schema";
 import { parseAmountToMinor } from "../money";
 import { normalizeMerchant, computeDedupHash } from "./dedup";
 import {
@@ -164,6 +164,24 @@ function addOne(item: AddTransactionInput): AddResult {
           name: line.name,
           note: line.note,
         })
+        .run();
+    }
+
+    // A holding's `invested` is the sum of what was put in, so a transfer has to move
+    // it. Left to be typed by hand it drifts the moment a second contribution is made,
+    // and every growth figure computed against it is then overstated by exactly the
+    // amount that went unrecorded. Inside the transaction so the row and the holding
+    // cannot disagree.
+    if (item.toHoldingId != null) {
+      tx.update(holdings)
+        .set({ investedMinor: sql`${holdings.investedMinor} + ${totalMinor}` })
+        .where(eq(holdings.id, item.toHoldingId))
+        .run();
+    }
+    if (item.fromHoldingId != null) {
+      tx.update(holdings)
+        .set({ investedMinor: sql`${holdings.investedMinor} - ${totalMinor}` })
+        .where(eq(holdings.id, item.fromHoldingId))
         .run();
     }
 

@@ -27,6 +27,15 @@ describe("assets", () => {
     expect(listAccounts()).toHaveLength(0);
   });
 
+  test("un-archiving brings an account back", () => {
+    const account = createAccount({ name: "Old", balanceMinor: 0, openingMinor: 0 });
+    updateAccount(account.id, { archived: true });
+    expect(listAccounts()).toHaveLength(0);
+
+    updateAccount(account.id, { archived: false });
+    expect(listAccounts()).toHaveLength(1);
+  });
+
   test("revaluing a holding records the value and the day", () => {
     const holding = createHolding({ name: "XTB", kind: "equity", investedMinor: 463000 });
     const updated = revalueHolding(holding.id, 590000, "2026-09-30");
@@ -61,8 +70,10 @@ describe("assets", () => {
       })
       .run();
 
+    // Asserts the constraint by name, not merely that something threw: the migration
+    // could not carry an ON DELETE clause, so this pins the behaviour it relies on.
     expect(() =>
       db.delete(schema.accounts).where(eq(schema.accounts.id, account.id)).run(),
-    ).toThrow();
+    ).toThrow("FOREIGN KEY constraint failed");
   });
 });

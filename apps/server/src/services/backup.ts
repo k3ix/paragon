@@ -41,6 +41,32 @@ export function createBackup(directory: string = DEFAULT_DIR): {
   return { path, sizeBytes: statSync(path).size };
 }
 
+/**
+ * When the snapshot's data is from, read from its name rather than its mtime.
+ *
+ * The filename is the only durable record of that. A cp, rsync, restore or editor
+ * touching the directory rewrites every mtime — as happened here on 2026-09-28, giving
+ * nineteen files named across two months one identical timestamp. Trusting mtime would
+ * make the oldest snapshot look newest, so the staleness check would skip the backup it
+ * exists to take, and pruning would delete the newest file instead of the oldest.
+ */
+function takenAtFromName(name: string): number {
+  const m = /^paragon-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})/.exec(name);
+  // Unreachable: callers filter on FILENAME first, which is a stricter form of this.
+  if (!m) throw new Error(`Not a backup filename: ${name}`);
+  const [, year, month, day, hour, minute, second] = m;
+  return (
+    new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+    ).getTime() / 1000
+  );
+}
+
 export function listBackups(
   directory: string = DEFAULT_DIR,
 ): { path: string; takenAt: number; sizeBytes: number }[] {
@@ -50,8 +76,7 @@ export function listBackups(
     .filter((name) => FILENAME.test(name))
     .map((name) => {
       const path = join(directory, name);
-      const stat = statSync(path);
-      return { path, takenAt: stat.mtimeMs / 1000, sizeBytes: stat.size };
+      return { path, takenAt: takenAtFromName(name), sizeBytes: statSync(path).size };
     })
     .sort((a, b) => b.takenAt - a.takenAt);
 }

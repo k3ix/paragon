@@ -24,6 +24,12 @@ CREATE TABLE `holdings` (
 	`created_at` integer DEFAULT (unixepoch()) NOT NULL
 );
 --> statement-breakpoint
+-- The schema declares onDelete: "restrict" on all four columns, but SQLite's
+-- ALTER TABLE ADD COLUMN cannot carry an ON DELETE clause — only a table-level FOREIGN
+-- KEY can, and that would mean rebuilding a table of hand-entered receipts. The omitted
+-- clause defaults to NO ACTION, which for these immediate (non-deferred) constraints
+-- refuses the delete exactly as RESTRICT does; test/assets.test.ts pins that. The two
+-- differ only for deferred constraints, which nothing here uses.
 ALTER TABLE `transactions` ADD `from_account_id` integer REFERENCES `accounts`(`id`);
 --> statement-breakpoint
 ALTER TABLE `transactions` ADD `to_account_id` integer REFERENCES `accounts`(`id`);
