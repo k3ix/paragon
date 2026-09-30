@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTransactions, usePeriods, usePeriodSummary, useBudget } from "./api/queries";
 import { currentMonth } from "./lib/format";
 import { PeriodPicker } from "./components/PeriodPicker";
+import { Assets } from "./components/Assets";
 import { Savings } from "./components/Savings";
 import { SetAside } from "./components/SetAside";
 import { MonthPace } from "./components/MonthPace";
@@ -19,7 +20,7 @@ function monthOf(period: string): string {
 
 export function App() {
   const [period, setPeriod] = useState<string | null>(null);
-  const [view, setView] = useState<"dashboard" | "settings">("dashboard");
+  const [view, setView] = useState<"dashboard" | "assets" | "settings">("dashboard");
   const [filter, setFilter] = useState<{ path: string; name: string } | null>(null);
 
   const periods = usePeriods();
@@ -49,6 +50,13 @@ export function App() {
             </button>
             <button
               type="button"
+              onClick={() => setView("assets")}
+              className={view === "assets" ? "text-ink-100" : "text-ink-300 hover:text-ink-100"}
+            >
+              Активы
+            </button>
+            <button
+              type="button"
               onClick={() => setView("settings")}
               className={view === "settings" ? "text-ink-100" : "text-ink-300 hover:text-ink-100"}
             >
@@ -67,6 +75,12 @@ export function App() {
             daysTotal={summary.data?.daysTotal ?? null}
             onChange={setPeriod}
           />
+        </div>
+      )}
+
+      {view === "assets" && (
+        <div className="mt-10">
+          <Assets />
         </div>
       )}
 

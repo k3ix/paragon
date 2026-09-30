@@ -37,6 +37,7 @@ function useInvalidateAll() {
       "commitments",
       "periods",
       "period-summary",
+      "assets",
     ]) {
       qc.invalidateQueries({ queryKey: [key] });
     }
@@ -105,6 +106,17 @@ export function useBudget(month: string) {
     queryKey: ["budget", month],
     queryFn: async () => {
       const { data, error } = await client.api.budget.get({ query: { month } });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useAssets() {
+  return useQuery({
+    queryKey: ["assets"],
+    queryFn: async () => {
+      const { data, error } = await client.api.assets.get();
       if (error) throw error;
       return data;
     },

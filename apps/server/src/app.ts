@@ -185,7 +185,61 @@ export const app = new Elysia({ prefix: "/api" })
 
   // Stock, not flow: what is held, as against what moved. The reconciliation gaps ride
   // along because they are only meaningful next to the balances they contradict.
-  .get("/assets", () => ({ ...assetsSummary(), reconciliation: reconcileAccounts() }))
+  // The response is declared rather than inferred: without it Eden hands the frontend
+  // `{}` and every field access there is unchecked.
+  .get("/assets", () => ({ ...assetsSummary(), reconciliation: reconcileAccounts() }), {
+    response: t.Object({
+      totalMinor: t.Number(),
+      accountsTotalMinor: t.Number(),
+      holdingsInvestedMinor: t.Number(),
+      holdingsValueMinor: t.Number(),
+      accounts: t.Array(
+        t.Object({
+          id: t.Number(),
+          name: t.String(),
+          currency: t.String(),
+          balanceMinor: t.Number(),
+          openingMinor: t.Number(),
+          openedOn: t.Union([t.String(), t.Null()]),
+          rateBp: t.Union([t.Number(), t.Null()]),
+          promoUntil: t.Union([t.String(), t.Null()]),
+        }),
+      ),
+      holdings: t.Array(
+        t.Object({
+          id: t.Number(),
+          name: t.String(),
+          kind: t.String(),
+          investedMinor: t.Number(),
+          valueMinor: t.Union([t.Number(), t.Null()]),
+          valuedAt: t.Union([t.String(), t.Null()]),
+          rateBp: t.Union([t.Number(), t.Null()]),
+          maturesOn: t.Union([t.String(), t.Null()]),
+          growthMinor: t.Union([t.Number(), t.Null()]),
+          growthPercent: t.Union([t.Number(), t.Null()]),
+        }),
+      ),
+      staleValuations: t.Array(
+        t.Object({
+          id: t.Number(),
+          name: t.String(),
+          valuedAt: t.Union([t.String(), t.Null()]),
+        }),
+      ),
+      expiringPromos: t.Array(
+        t.Object({ id: t.Number(), name: t.String(), promoUntil: t.String() }),
+      ),
+      reconciliation: t.Array(
+        t.Object({
+          accountId: t.Number(),
+          name: t.String(),
+          expectedMinor: t.Number(),
+          statedMinor: t.Number(),
+          differenceMinor: t.Number(),
+        }),
+      ),
+    }),
+  })
 
   .post("/accounts", ({ body }) => createAccount(body), {
     body: t.Object({
