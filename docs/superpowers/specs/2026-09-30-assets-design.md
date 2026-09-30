@@ -184,13 +184,22 @@ in chat.
 - **Automatic price feeds.** The portfolio figure is typed in. A feed is a dependency,
   a failure mode and a rate limit in exchange for saving one sentence a month.
 
-## Migration
+## Getting the existing data in
 
-1. Create both tables and the four transaction columns.
-2. Enter what exists today: savings 107 123.29, the XTB portfolio, cash, any bonds.
-3. Assign accounts to the existing transfers — roughly a dozen rows, each identifiable
-   as savings, brokerage or cash.
-4. Derive `opening_minor` for each account by subtracting those assigned movements from
-   today's balance, and set `opened_on` to 2026-07-31.
-5. Check that reconciliation comes out clean. It will by construction — step 4 makes it
-   so. Its value starts with the next movement recorded after this.
+One schema migration, then a conversation.
+
+**The migration** creates both tables and the four transaction columns. Nothing else is
+automated.
+
+**The conversation** is how the data arrives, because every judgement in it is the
+owner's:
+
+1. Enter what exists today: savings 107 123.29, the XTB portfolio, cash, any bonds.
+2. Walk the existing transfers one at a time — roughly a dozen rows — and decide for
+   each whether it went to savings, to the brokerage, or came out of cash. No rule can
+   infer this; the owner remembers it.
+3. Derive `opening_minor` per account by subtracting those movements from today's
+   balance, and set `opened_on` to 2026-07-31.
+
+Reconciliation comes out clean by construction after step 3. Its value starts with the
+next movement recorded after this.
