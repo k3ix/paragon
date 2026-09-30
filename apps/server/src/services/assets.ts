@@ -166,3 +166,81 @@ export function revalueHolding(id: number, valueMinor: number, valuedAt: string)
     .get();
   return toHolding(row);
 }
+
+export type HoldingWithGrowth = Holding & {
+  growthMinor: number | null;
+  growthPercent: number | null;
+};
+
+export type AssetsSummary = {
+  totalMinor: number;
+  accounts: Account[];
+  accountsTotalMinor: number;
+  holdings: HoldingWithGrowth[];
+  holdingsInvestedMinor: number;
+  holdingsValueMinor: number;
+  staleValuations: { id: number; name: string; valuedAt: string | null }[];
+  expiringPromos: { id: number; name: string; promoUntil: string }[];
+};
+
+/** "YYYY-MM-DD" a given number of days from today, in local time. */
+function dayOffset(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * What is held, and what it has done.
+ *
+ * A holding with no valuation counts at what was put into it. Treating an absent price
+ * as zero would report a holding bought this morning as a total loss, and drag the
+ * headline total down with it. Growth stays null in that case rather than claiming a
+ * gain of zero, because "not yet known" and "unchanged" are different facts.
+ */
+export function assetsSummary(): AssetsSummary {
+  const accountRows = listAccounts();
+  const holdingRows = listHoldings();
+
+  const accountsTotalMinor = accountRows.reduce((sum, a) => sum + a.balanceMinor, 0);
+
+  const withGrowth: HoldingWithGrowth[] = holdingRows.map((h) => {
+    if (h.valueMinor === null) {
+      return { ...h, growthMinor: null, growthPercent: null };
+    }
+    const growthMinor = h.valueMinor - h.investedMinor;
+    return {
+      ...h,
+      growthMinor,
+      // A holding that cost nothing has no percentage to report; dividing would be
+      // infinity, and rounding infinity produces a number that looks meaningful.
+      growthPercent:
+        h.investedMinor === 0 ? null : Math.round((growthMinor / h.investedMinor) * 100),
+    };
+  });
+
+  const holdingsInvestedMinor = holdingRows.reduce((sum, h) => sum + h.investedMinor, 0);
+  const holdingsValueMinor = holdingRows.reduce(
+    (sum, h) => sum + (h.valueMinor ?? h.investedMinor),
+    0,
+  );
+
+  const monthAgo = dayOffset(-30);
+  const monthAhead = dayOffset(30);
+  const today = dayOffset(0);
+
+  return {
+    totalMinor: accountsTotalMinor + holdingsValueMinor,
+    accounts: accountRows,
+    accountsTotalMinor,
+    holdings: withGrowth,
+    holdingsInvestedMinor,
+    holdingsValueMinor,
+    staleValuations: holdingRows
+      .filter((h) => h.valuedAt !== null && h.valuedAt < monthAgo)
+      .map((h) => ({ id: h.id, name: h.name, valuedAt: h.valuedAt })),
+    expiringPromos: accountRows
+      .filter((a) => a.promoUntil !== null && a.promoUntil >= today && a.promoUntil <= monthAhead)
+      .map((a) => ({ id: a.id, name: a.name, promoUntil: a.promoUntil as string })),
+  };
+}
