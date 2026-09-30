@@ -55,6 +55,24 @@ export const transactions = sqliteTable(
     payer: text("payer"),
     scope: text("scope"),
     account: text("account"),
+    // Where the money came from and went, when it is somewhere tracked. All four are
+    // usually null: a purchase names nothing, because everyday cards are deliberately
+    // not tracked — a card balance would disagree with reality by lunchtime, and a
+    // reconciliation warning that is always on is one nobody reads. Accounts and
+    // holdings get separate columns rather than a (kind, id) pair so the foreign keys
+    // survive.
+    fromAccountId: integer("from_account_id").references(() => accounts.id, {
+      onDelete: "restrict",
+    }),
+    toAccountId: integer("to_account_id").references(() => accounts.id, {
+      onDelete: "restrict",
+    }),
+    fromHoldingId: integer("from_holding_id").references(() => holdings.id, {
+      onDelete: "restrict",
+    }),
+    toHoldingId: integer("to_holding_id").references(() => holdings.id, {
+      onDelete: "restrict",
+    }),
     note: text("note"),
     // Whether this income opens a new pay period. Only a paycheque does. Money that
     // was earned earlier and merely surfaced now — a gift spent on a trip, a refund,
@@ -122,3 +140,54 @@ export const lineItems = sqliteTable(
     index("line_items_category_idx").on(t.categoryId),
   ],
 );
+
+/**
+ * Where money sits: savings accounts, cash, a foreign-currency balance.
+ *
+ * Everyday cards are deliberately absent. Their balance would diverge from reality
+ * within a day of ordinary spending, and an account that never reconciles teaches the
+ * reader to ignore the warning that says so.
+ */
+export const accounts = sqliteTable("accounts", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  currency: text("currency").notNull().default("PLN"),
+  // What the bank says today. Typed in rather than derived: the application sees only
+  // the movements it was told about, and this is the truth they are checked against.
+  balanceMinor: integer("balance_minor").notNull().default(0),
+  // The balance on the day this account entered the application. Reconciliation counts
+  // movements forward from here; without it there is nothing to count from.
+  openingMinor: integer("opening_minor").notNull().default(0),
+  openedOn: text("opened_on"),
+  // Annual rate in basis points: 4.25% is 425. An integer, because money and rates
+  // both lose to floating point.
+  rateBp: integer("rate_bp"),
+  // When a promotional rate lapses and the money should probably move.
+  promoUntil: text("promo_until"),
+  archivedAt: integer("archived_at"),
+  createdAt: integer("created_at").notNull().default(sql`(unixepoch())`),
+});
+
+/**
+ * What money is invested in: a brokerage portfolio, bonds.
+ *
+ * Purchase lots are deliberately absent. The question this answers is "what did it
+ * grow by", and invested against value answers it. Lots earn their place when a
+ * specific sale has to be taxed.
+ */
+export const holdings = sqliteTable("holdings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  // "equity" or "bond".
+  kind: text("kind").notNull(),
+  // Sum of what was put in, moved by transfers rather than typed.
+  investedMinor: integer("invested_minor").notNull().default(0),
+  // What it is worth now. NULL until the first valuation: a holding bought today has
+  // no price yet, and defaulting to zero would report it as a total loss.
+  valueMinor: integer("value_minor"),
+  valuedAt: text("valued_at"),
+  rateBp: integer("rate_bp"),
+  maturesOn: text("matures_on"),
+  archivedAt: integer("archived_at"),
+  createdAt: integer("created_at").notNull().default(sql`(unixepoch())`),
+});

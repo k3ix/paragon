@@ -29,6 +29,9 @@ export function resetTestDb() {
   sqlite.exec("PRAGMA foreign_keys = OFF;");
   db.delete(schema.lineItems).run();
   db.delete(schema.transactions).run();
+  // After transactions: both are referenced by them with ON DELETE RESTRICT.
+  db.delete(schema.accounts).run();
+  db.delete(schema.holdings).run();
   db.delete(schema.merchants).run();
   db.delete(schema.commitments).run();
   db.delete(schema.categories).run();
