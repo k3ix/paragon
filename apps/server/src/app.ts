@@ -12,6 +12,14 @@ import {
   getCategoryTreeBreakdown,
   getCategoryTreeForRange,
 } from "./services/summary";
+import {
+  assetsSummary,
+  createAccount,
+  updateAccount,
+  createHolding,
+  revalueHolding,
+} from "./services/assets";
+import { reconcileAccounts } from "./services/reconcile";
 import { getBudget } from "./services/budget";
 import { getPace } from "./services/pace";
 import { payPeriods, resolvePeriod } from "./services/periods";
@@ -33,6 +41,7 @@ import { createBackup, pruneBackups } from "./services/backup";
 // Matches the shape "YYYY-MM". The month *number* is still validated in the service,
 // because 2026-13 matches this pattern but is not a month.
 const monthPattern = "^\\d{4}-\\d{2}$";
+const dayPattern = "^\\d{4}-\\d{2}-\\d{2}$";
 const monthQuery = t.Object({ month: t.String({ pattern: monthPattern }) });
 
 // A period is either a calendar month or a pay period keyed by its start date.
@@ -173,6 +182,57 @@ export const app = new Elysia({ prefix: "/api" })
       perDayLeftMinor: t.Union([t.Number(), t.Null()]),
     }),
   })
+
+  // Stock, not flow: what is held, as against what moved. The reconciliation gaps ride
+  // along because they are only meaningful next to the balances they contradict.
+  .get("/assets", () => ({ ...assetsSummary(), reconciliation: reconcileAccounts() }))
+
+  .post("/accounts", ({ body }) => createAccount(body), {
+    body: t.Object({
+      name: t.String({ minLength: 1 }),
+      balanceMinor: t.Integer(),
+      openingMinor: t.Integer(),
+      currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
+      openedOn: t.Optional(t.Union([t.String({ pattern: dayPattern }), t.Null()])),
+      rateBp: t.Optional(t.Union([t.Integer(), t.Null()])),
+      promoUntil: t.Optional(t.Union([t.String({ pattern: dayPattern }), t.Null()])),
+    }),
+  })
+
+  .patch("/accounts/:id", ({ params, body }) => updateAccount(Number(params.id), body), {
+    params: t.Object({ id: t.String() }),
+    body: t.Object({
+      name: t.Optional(t.String({ minLength: 1 })),
+      balanceMinor: t.Optional(t.Integer()),
+      openingMinor: t.Optional(t.Integer()),
+      openedOn: t.Optional(t.Union([t.String({ pattern: dayPattern }), t.Null()])),
+      rateBp: t.Optional(t.Union([t.Integer(), t.Null()])),
+      promoUntil: t.Optional(t.Union([t.String({ pattern: dayPattern }), t.Null()])),
+      archived: t.Optional(t.Boolean()),
+    }),
+  })
+
+  .post("/holdings", ({ body }) => createHolding(body), {
+    body: t.Object({
+      name: t.String({ minLength: 1 }),
+      kind: t.Union([t.Literal("equity"), t.Literal("bond")]),
+      investedMinor: t.Integer(),
+      rateBp: t.Optional(t.Union([t.Integer(), t.Null()])),
+      maturesOn: t.Optional(t.Union([t.String({ pattern: dayPattern }), t.Null()])),
+    }),
+  })
+
+  .patch(
+    "/holdings/:id/value",
+    ({ params, body }) => revalueHolding(Number(params.id), body.valueMinor, body.valuedAt),
+    {
+      params: t.Object({ id: t.String() }),
+      body: t.Object({
+        valueMinor: t.Integer(),
+        valuedAt: t.String({ pattern: dayPattern }),
+      }),
+    },
+  )
 
   .get("/commitments", () => listCommitments())
 
