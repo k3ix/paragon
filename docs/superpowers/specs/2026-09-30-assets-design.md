@@ -175,6 +175,16 @@ Through MCP, like everything else: "процент на сберег 380 за с
 A settings page allows editing by hand, for corrections that do not deserve a sentence
 in chat.
 
+## Backups
+
+Noticed while writing this: the newest backup was from 2026-08-10, seven weeks and some
+two hundred transactions ago. The mechanism worked — it was only ever invoked by hand,
+and the hand stopped when the code did.
+
+A backup is therefore taken from the write path itself, at most once a day, and a
+failure to take one never blocks a recording. Losing today's receipt to a full disk
+would be a worse outcome than the missing copy.
+
 ## What this does not include
 
 - **Goals and progress.** Removed during design; the denominator would be invented.
