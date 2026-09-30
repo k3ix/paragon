@@ -9,6 +9,8 @@ import {
 } from "./tools/set-merchant-category";
 import { def as reassignDef, handler as reassignHandler } from "./tools/reassign-line-items";
 import { def as getSummaryDef, handler as getSummaryHandler } from "./tools/get-summary";
+import { def as listAssetsDef, handler as listAssetsHandler } from "./tools/list-assets";
+import { def as recordAssetDef, handler as recordAssetHandler } from "./tools/record-asset";
 
 const server = new McpServer({ name: "paragon", version: "0.0.1" });
 
@@ -22,6 +24,8 @@ server.registerTool(
 );
 server.registerTool(reassignDef.name, reassignDef.config, reassignHandler);
 server.registerTool(getSummaryDef.name, getSummaryDef.config, getSummaryHandler);
+server.registerTool(listAssetsDef.name, listAssetsDef.config, listAssetsHandler);
+server.registerTool(recordAssetDef.name, recordAssetDef.config, recordAssetHandler);
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
