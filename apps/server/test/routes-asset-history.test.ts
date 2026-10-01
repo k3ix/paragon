@@ -80,3 +80,27 @@ describe("history of something that does not exist", () => {
     expect((await api("/api/holdings/999/history")).status).toBe(404);
   });
 });
+
+describe("day strings stay strings on the wire", () => {
+  beforeEach(resetTestDb);
+
+  // Eden parses date-shaped values into Date objects, and React cannot render a Date:
+  // it throws "Objects are not valid as a React child" and unmounts the whole tree —
+  // a black screen. /periods already carries a comment about this; these routes need
+  // the days to survive as text.
+  test("a lot's day and an account's promo day come back as strings", async () => {
+    const xtb = createHolding({ name: "XTB", kind: "equity", investedMinor: 0 });
+    await send(`/api/holdings/${xtb.id}/lots`, "POST", {
+      boughtOn: "2026-05-07",
+      quantityMicro: 1000000,
+      priceMinor: 10000,
+      currency: "EUR",
+      fxRate: 4000000,
+      costMinor: 40000,
+    });
+
+    const body = (await (await api(`/api/holdings/${xtb.id}/history`)).json()) as any;
+    expect(typeof body.lots[0].boughtOn).toBe("string");
+    expect(body.lots[0].boughtOn).toBe("2026-05-07");
+  });
+});

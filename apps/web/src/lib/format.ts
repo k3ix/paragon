@@ -47,3 +47,19 @@ export function shiftMonth(month: string, delta: number): string {
   const total = year! * 12 + (m! - 1) + delta;
   return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;
 }
+
+/**
+ * A day as text, whatever the client handed us.
+ *
+ * Eden parses date-shaped strings into Date objects on the way in. React cannot render
+ * a Date — it throws "Objects are not valid as a React child" and unmounts the tree,
+ * which shows up as a black screen — so every day that reaches the DOM goes through
+ * here. The server stores and sends "YYYY-MM-DD"; this only undoes the client's
+ * helpfulness.
+ */
+export function day(value: string | Date | null | undefined): string {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+}

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAssets, useAccountHistory, useHoldingHistory } from "../api/queries";
-import { money, dayLabel } from "../lib/format";
+import { money, dayLabel, day } from "../lib/format";
 
 type Movement = {
   id: number;
@@ -77,7 +77,7 @@ export function Assets() {
                     {account.rateBp !== null && (
                       <p className="tnum text-sm text-ink-300">
                         {(account.rateBp / 100).toFixed(2)}%
-                        {account.promoUntil && ` до ${account.promoUntil}`}
+                        {account.promoUntil && ` до ${day(account.promoUntil)}`}
                       </p>
                     )}
                   </div>
@@ -183,7 +183,7 @@ function HoldingHistory({ id }: { id: number }) {
             {lots.map((lot) => (
               <li key={lot.id} className="tnum flex flex-wrap justify-between gap-x-4">
                 <span className="text-ink-300">
-                  {lot.boughtOn} · {(lot.quantityMicro / 1e6).toFixed(4)} ×{" "}
+                  {day(lot.boughtOn)} · {(lot.quantityMicro / 1e6).toFixed(4)} ×{" "}
                   {money(lot.priceMinor)} {lot.currency}
                   {lot.fxRate !== null && ` @ ${(lot.fxRate / 1e6).toFixed(4)}`}
                 </span>
@@ -235,13 +235,17 @@ function Movements({ movements }: { movements: Movement[] }) {
  * sparkline is inline SVG: no chart library is installed, and the page cannot reach a
  * CDN.
  */
-function Valuations({ valuations }: { valuations: { id: number; valuedOn: string; valueMinor: number }[] }) {
+function Valuations({
+  valuations,
+}: {
+  valuations: { id: number; valuedOn: string | Date; valueMinor: number }[];
+}) {
   if (valuations.length < 3) {
     return (
       <ul className="mt-2 space-y-1 text-sm">
         {valuations.map((v) => (
           <li key={v.id} className="tnum flex justify-between gap-x-4">
-            <span className="text-ink-300">{v.valuedOn}</span>
+            <span className="text-ink-300">{day(v.valuedOn)}</span>
             <span className="tabular-nums text-ink-100">{money(v.valueMinor)} zł</span>
           </li>
         ))}
@@ -279,10 +283,10 @@ function Valuations({ valuations }: { valuations: { id: number; valuedOn: string
       </svg>
       <div className="tnum mt-1 flex justify-between text-sm text-ink-300">
         <span>
-          {first.valuedOn} · {money(first.valueMinor)} zł
+          {day(first.valuedOn)} · {money(first.valueMinor)} zł
         </span>
         <span>
-          {last.valuedOn} · {money(last.valueMinor)} zł
+          {day(last.valuedOn)} · {money(last.valueMinor)} zł
         </span>
       </div>
     </div>
@@ -310,11 +314,11 @@ function Warnings({ reconciliation, expiringPromos, staleValuations }: WarningPr
     })),
     ...expiringPromos.map((promo) => ({
       key: `promo-${promo.id}`,
-      text: `Промо-ставка ${promo.name} заканчивается ${promo.promoUntil}.`,
+      text: `Промо-ставка ${promo.name} заканчивается ${day(promo.promoUntil)}.`,
     })),
     ...staleValuations.map((stale) => ({
       key: `stale-${stale.id}`,
-      text: `Оценка ${stale.name} не обновлялась с ${stale.valuedAt}.`,
+      text: `Оценка ${stale.name} не обновлялась с ${day(stale.valuedAt)}.`,
     })),
   ];
 
