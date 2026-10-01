@@ -18,7 +18,7 @@ export type Reconciliation = {
  * local midnight here would shift the boundary by an hour or two and silently drop a
  * movement recorded on the opening day itself.
  */
-function dayStart(day: string): number {
+export function dayStart(day: string): number {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day.trim());
   if (!match) throw new Error(`Invalid date, expected YYYY-MM-DD: ${day}`);
   const [, y, m, d] = match;

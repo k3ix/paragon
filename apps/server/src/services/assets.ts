@@ -169,12 +169,20 @@ export function revalueHolding(id: number, valueMinor: number, valuedAt: string)
   // See updateAccount: the phrase drives the HTTP status.
   if (!existing) throw new Error(`Holding not found: ${id}`);
 
-  const row = db
-    .update(holdings)
-    .set({ valueMinor, valuedAt })
-    .where(eq(holdings.id, id))
-    .returning()
-    .get();
+  // The headline only moves forward. Backfilling an older valuation — which this
+  // feature exists to make possible — would otherwise report a month-old figure as
+  // today's, dragging growth, the portfolio total and the stale-valuation warning with
+  // it. ISO dates compare correctly as strings, as assetsSummary already relies on.
+  const isNewer = existing.valuedAt === null || valuedAt >= existing.valuedAt;
+
+  const row = isNewer
+    ? db
+        .update(holdings)
+        .set({ valueMinor, valuedAt })
+        .where(eq(holdings.id, id))
+        .returning()
+        .get()
+    : existing;
 
   // History behind the headline figure. A repeat on the same day replaces rather than
   // accumulates: revaluing twice in an afternoon is fixing a typo, not recording a
@@ -293,9 +301,58 @@ export type LotInput = {
 
 export type Valuation = { id: number; valuedOn: string; valueMinor: number };
 
-function requireHolding(id: number): void {
+export function requireHolding(id: number): void {
   if (!db.select().from(holdings).where(eq(holdings.id, id)).get()) {
     throw new Error(`Holding not found: ${id}`);
+  }
+}
+
+export function requireAccount(id: number): void {
+  if (!db.select().from(accounts).where(eq(accounts.id, id)).get()) {
+    throw new Error(`Account not found: ${id}`);
+  }
+}
+
+/**
+ * Rejects figures that would corrupt a row rather than fail.
+ *
+ * SQLite stores a non-integral float verbatim in an INTEGER column — type affinity does
+ * not coerce it — so a mistyped quantity becomes a permanently wrong number that only
+ * surfaces as a malformed string on screen. This is the common path for the HTTP route,
+ * the MCP tool and direct service calls, so the guard lives here rather than in any one
+ * of them.
+ */
+function checkLotFigures(input: LotInput): void {
+  for (const [field, value] of [
+    ["quantityMicro", input.quantityMicro],
+    ["priceMinor", input.priceMinor],
+    ["costMinor", input.costMinor],
+    ["fxRate", input.fxRate],
+  ] as const) {
+    if (value == null) continue;
+    if (!Number.isInteger(value)) {
+      throw new Error(`A lot's ${field} must be a whole number, got ${value}`);
+    }
+  }
+
+  if (input.quantityMicro <= 0) {
+    throw new Error(`A lot's quantityMicro must be positive, got ${input.quantityMicro}`);
+  }
+  if (input.costMinor <= 0) {
+    throw new Error(`A lot's costMinor must be positive, got ${input.costMinor}`);
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.boughtOn)) {
+    throw new Error(`A lot's boughtOn must be YYYY-MM-DD, got ${input.boughtOn}`);
+  }
+
+  // Rates are millionths: 4.2482 EUR/PLN is 4248200. add_transactions takes the human
+  // rate and converts, so the same field name means two things across the two MCP
+  // tools; a bare "4.2482" here would be a million times too small and would store a
+  // wrong number silently. No real currency pair sits outside this range.
+  if (input.fxRate != null && (input.fxRate < 100_000 || input.fxRate > 100_000_000)) {
+    throw new Error(
+      `A lot's fxRate is in millionths — 4.2482 is 4248200 — got ${input.fxRate}`,
+    );
   }
 }
 
@@ -309,6 +366,7 @@ function requireHolding(id: number): void {
  */
 export function addLot(input: LotInput): Lot {
   requireHolding(input.holdingId);
+  checkLotFigures(input);
 
   const row = db
     .insert(lots)

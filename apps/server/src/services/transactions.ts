@@ -76,6 +76,35 @@ function upsertMerchant(
  *   1. the line amounts must sum to the transaction total;
  *   2. a repeat of the same receipt returns already_exists instead of inserting.
  */
+/**
+ * Moves a holding's `invested` by what a transfer put in or took out.
+ *
+ * Every path that creates, edits or removes a transfer goes through here, so the figure
+ * cannot drift from the movements rendered beside it on screen. Expressed as SQL
+ * arithmetic rather than read-modify-write, and always called inside the caller's
+ * transaction, so the row and the holding commit together.
+ */
+function applyHoldingDelta(
+  tx: { update: typeof db.update },
+  row: { toHoldingId: number | null; fromHoldingId: number | null; totalMinor: number },
+  sign: 1 | -1,
+): void {
+  if (row.toHoldingId != null) {
+    const delta = sign * row.totalMinor;
+    tx.update(holdings)
+      .set({ investedMinor: sql`${holdings.investedMinor} + ${delta}` })
+      .where(eq(holdings.id, row.toHoldingId))
+      .run();
+  }
+  if (row.fromHoldingId != null) {
+    const delta = sign * row.totalMinor;
+    tx.update(holdings)
+      .set({ investedMinor: sql`${holdings.investedMinor} - ${delta}` })
+      .where(eq(holdings.id, row.fromHoldingId))
+      .run();
+  }
+}
+
 export function addTransactions(items: AddTransactionInput[]): AddResult[] {
   // Once a day, before anything is written. Backups used to be taken by hand, which
   // held while the code was being written and stopped the moment it wasn't — the newest
@@ -170,20 +199,12 @@ function addOne(item: AddTransactionInput): AddResult {
     // A holding's `invested` is the sum of what was put in, so a transfer has to move
     // it. Left to be typed by hand it drifts the moment a second contribution is made,
     // and every growth figure computed against it is then overstated by exactly the
-    // amount that went unrecorded. Inside the transaction so the row and the holding
-    // cannot disagree.
-    if (item.toHoldingId != null) {
-      tx.update(holdings)
-        .set({ investedMinor: sql`${holdings.investedMinor} + ${totalMinor}` })
-        .where(eq(holdings.id, item.toHoldingId))
-        .run();
-    }
-    if (item.fromHoldingId != null) {
-      tx.update(holdings)
-        .set({ investedMinor: sql`${holdings.investedMinor} - ${totalMinor}` })
-        .where(eq(holdings.id, item.fromHoldingId))
-        .run();
-    }
+    // amount that went unrecorded.
+    applyHoldingDelta(tx, {
+      toHoldingId: item.toHoldingId ?? null,
+      fromHoldingId: item.fromHoldingId ?? null,
+      totalMinor,
+    }, 1);
 
     return { status: "created" as const, id: inserted.id };
   });
@@ -267,6 +288,19 @@ export function updateTransaction(
   }
 
   db.transaction((tx) => {
+    // The patch carries no asset endpoints, so they survive the edit unchanged — but
+    // the amount may not have. Reverse what the old row contributed and apply the new,
+    // or `invested` keeps a figure the movement list no longer shows.
+    applyHoldingDelta(tx, existing, -1);
+    applyHoldingDelta(
+      tx,
+      {
+        toHoldingId: existing.toHoldingId,
+        fromHoldingId: existing.fromHoldingId,
+        totalMinor,
+      },
+      1,
+    );
     const merchantId =
       merchantNorm && type !== "transfer"
         ? upsertMerchant(
@@ -317,6 +351,9 @@ export function deleteTransaction(id: number): { deleted: true } {
   // line_items has ON DELETE CASCADE, but the delete is explicit so the intent is
   // visible at the call site rather than resting on a schema detail.
   db.transaction((tx) => {
+    // Take the money back out of whatever holding this transfer fed, or the figure
+    // outlives the movement that justified it.
+    applyHoldingDelta(tx, existing, -1);
     tx.delete(lineItems).where(eq(lineItems.transactionId, id)).run();
     tx.delete(transactions).where(eq(transactions.id, id)).run();
   });

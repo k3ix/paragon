@@ -68,3 +68,15 @@ describe("asset history routes", () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe("history of something that does not exist", () => {
+  beforeEach(resetTestDb);
+
+  test("an unknown account is 404, not an empty history", async () => {
+    expect((await api("/api/accounts/999/history")).status).toBe(404);
+  });
+
+  test("an unknown holding is 404, not an empty history", async () => {
+    expect((await api("/api/holdings/999/history")).status).toBe(404);
+  });
+});

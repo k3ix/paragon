@@ -186,3 +186,97 @@ describe("valuation history", () => {
     expect(db.select().from(schema.valuations).all()).toHaveLength(0);
   });
 });
+
+describe("addLot guards its inputs", () => {
+  beforeEach(resetTestDb);
+
+  test("refuses a non-integer quantity, price or cost", () => {
+    const xtb = createHolding({ name: "XTB", kind: "equity", investedMinor: 0 });
+    const base = {
+      holdingId: xtb.id,
+      boughtOn: "2026-05-07",
+      quantityMicro: 1000000,
+      priceMinor: 10000,
+      currency: "EUR",
+      fxRate: 4000000,
+      costMinor: 40000,
+    };
+    expect(() => addLot({ ...base, quantityMicro: 4382300.7 })).toThrow("whole number");
+    expect(() => addLot({ ...base, priceMinor: 15792.4 })).toThrow("whole number");
+    expect(() => addLot({ ...base, costMinor: 293998.9 })).toThrow("whole number");
+    expect(() => addLot({ ...base, fxRate: 4.2482 })).toThrow("whole number");
+  });
+
+  test("refuses a rate given in the wrong convention", () => {
+    const xtb = createHolding({ name: "XTB", kind: "equity", investedMinor: 0 });
+    // 4.2482 EUR/PLN in millionths is 4248200. A bare 4 is a million times too small.
+    expect(() =>
+      addLot({
+        holdingId: xtb.id,
+        boughtOn: "2026-05-07",
+        quantityMicro: 1000000,
+        priceMinor: 10000,
+        currency: "EUR",
+        fxRate: 4,
+        costMinor: 40000,
+      }),
+    ).toThrow("millionths");
+  });
+
+  test("refuses a negative quantity or cost", () => {
+    const xtb = createHolding({ name: "XTB", kind: "equity", investedMinor: 0 });
+    const base = {
+      holdingId: xtb.id,
+      boughtOn: "2026-05-07",
+      quantityMicro: 1000000,
+      priceMinor: 10000,
+      currency: "EUR",
+      fxRate: 4000000,
+      costMinor: 40000,
+    };
+    expect(() => addLot({ ...base, quantityMicro: -1000000 })).toThrow("positive");
+    expect(() => addLot({ ...base, costMinor: -40000 })).toThrow("positive");
+  });
+
+  test("refuses a malformed purchase date", () => {
+    const xtb = createHolding({ name: "XTB", kind: "equity", investedMinor: 0 });
+    expect(() =>
+      addLot({
+        holdingId: xtb.id,
+        boughtOn: "not-a-date",
+        quantityMicro: 1000000,
+        priceMinor: 10000,
+        currency: "EUR",
+        fxRate: 4000000,
+        costMinor: 40000,
+      }),
+    ).toThrow("YYYY-MM-DD");
+  });
+});
+
+describe("revaluing with an older date", () => {
+  beforeEach(resetTestDb);
+
+  test("backfilling an older figure does not overwrite the current one", () => {
+    const xtb = createHolding({ name: "XTB", kind: "equity", investedMinor: 0 });
+    revalueHolding(xtb.id, 1485795, "2026-09-30");
+    const after = revalueHolding(xtb.id, 1400000, "2026-08-31");
+
+    // The headline keeps the newest figure...
+    expect(after.valueMinor).toBe(1485795);
+    expect(after.valuedAt).toBe("2026-09-30");
+    // ...and the older one still joins the history.
+    expect(listValuations(xtb.id).map((v) => v.valuedOn)).toEqual([
+      "2026-08-31",
+      "2026-09-30",
+    ]);
+  });
+
+  test("a newer figure does replace the headline", () => {
+    const xtb = createHolding({ name: "XTB", kind: "equity", investedMinor: 0 });
+    revalueHolding(xtb.id, 1400000, "2026-08-31");
+    const after = revalueHolding(xtb.id, 1485795, "2026-09-30");
+    expect(after.valueMinor).toBe(1485795);
+    expect(after.valuedAt).toBe("2026-09-30");
+  });
+});

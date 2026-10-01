@@ -1,7 +1,15 @@
-import { eq, or, asc } from "drizzle-orm";
+import { eq, or, and, gte, asc } from "drizzle-orm";
 import { db } from "../db";
 import { transactions, accounts } from "../db/schema";
-import { listLots, listValuations, type Lot, type Valuation } from "./assets";
+import {
+  listLots,
+  listValuations,
+  requireAccount,
+  requireHolding,
+  type Lot,
+  type Valuation,
+} from "./assets";
+import { dayStart } from "./reconcile";
 
 export type Movement = {
   id: number;
@@ -26,6 +34,27 @@ export type Movement = {
  * recorded, and adding a negative handles it without a special case.
  */
 export function accountHistory(accountId: number): { movements: Movement[] } {
+  // An id that does not exist and an asset with no movements are different facts, and
+  // an empty list would report them identically.
+  requireAccount(accountId);
+
+  // The running total starts where the account did, not at zero, so the last line can
+  // be compared against what the account says it holds today.
+  const account = db
+    .select({ openingMinor: accounts.openingMinor, openedOn: accounts.openedOn })
+    .from(accounts)
+    .where(eq(accounts.id, accountId))
+    .get();
+
+  const names = or(
+    eq(transactions.toAccountId, accountId),
+    eq(transactions.fromAccountId, accountId),
+  );
+
+  // Same window as reconcileAccounts, deliberately: movements before the opening date
+  // are already baked into `openingMinor`, so counting them again both double-counts
+  // and makes this list disagree with the reconciliation warning that is supposed to
+  // catch exactly that — leaving the screen contradicting itself in silence.
   const rows = db
     .select({
       id: transactions.id,
@@ -37,18 +66,12 @@ export function accountHistory(accountId: number): { movements: Movement[] } {
     })
     .from(transactions)
     .where(
-      or(eq(transactions.toAccountId, accountId), eq(transactions.fromAccountId, accountId)),
+      account?.openedOn
+        ? and(gte(transactions.occurredOn, dayStart(account.openedOn)), names)
+        : names,
     )
     .orderBy(asc(transactions.occurredOn), asc(transactions.id))
     .all();
-
-  // The running total starts where the account did, not at zero, so the last line can
-  // be compared against what the account says it holds today.
-  const account = db
-    .select({ openingMinor: accounts.openingMinor })
-    .from(accounts)
-    .where(eq(accounts.id, accountId))
-    .get();
 
   let running = account?.openingMinor ?? 0;
 
@@ -81,6 +104,8 @@ export function holdingHistory(holdingId: number): {
   lots: Lot[];
   valuations: Valuation[];
 } {
+  requireHolding(holdingId);
+
   const rows = db
     .select({
       id: transactions.id,

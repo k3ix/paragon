@@ -7,7 +7,11 @@ import {
   revalueHolding,
   assetsSummary,
 } from "../src/services/assets";
-import { addTransactions } from "../src/services/transactions";
+import {
+  addTransactions,
+  updateTransaction,
+  deleteTransaction,
+} from "../src/services/transactions";
 
 describe("transfers that name assets", () => {
   beforeEach(resetTestDb);
@@ -167,5 +171,30 @@ describe("transfers move what is invested", () => {
     // rises, so the money is now counted once on each side rather than vanishing.
     expect(assetsSummary().holdingsInvestedMinor).toBe(500000);
     expect(assetsSummary().totalMinor).toBe(before + 500000);
+  });
+});
+
+describe("editing and deleting a transfer keeps invested honest", () => {
+  beforeEach(resetTestDb);
+
+  test("deleting a transfer takes its money back out of the holding", () => {
+    const xtb = createHolding({ name: "XTB", kind: "equity", investedMinor: 0 });
+    const [result] = addTransactions([
+      { date: "2026-09-10", total: "4630.00", type: "transfer", toHoldingId: xtb.id },
+    ]);
+    expect(listHoldings()[0]?.investedMinor).toBe(463000);
+
+    deleteTransaction(result!.id);
+    expect(listHoldings()[0]?.investedMinor).toBe(0);
+  });
+
+  test("changing a transfer's amount moves the holding by the difference", () => {
+    const xtb = createHolding({ name: "XTB", kind: "equity", investedMinor: 0 });
+    const [result] = addTransactions([
+      { date: "2026-09-10", total: "4630.00", type: "transfer", toHoldingId: xtb.id },
+    ]);
+
+    updateTransaction(result!.id, { total: "4000.00" });
+    expect(listHoldings()[0]?.investedMinor).toBe(400000);
   });
 });

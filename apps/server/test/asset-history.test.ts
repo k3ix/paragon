@@ -3,6 +3,7 @@ import { resetTestDb } from "./helpers/db";
 import { createAccount, createHolding, addLot, revalueHolding } from "../src/services/assets";
 import { addTransactions } from "../src/services/transactions";
 import { accountHistory, holdingHistory } from "../src/services/asset-history";
+import { reconcileAccounts } from "../src/services/reconcile";
 
 describe("account history", () => {
   beforeEach(resetTestDb);
@@ -94,5 +95,30 @@ describe("holding history", () => {
     expect(history.movements).toHaveLength(1);
     expect(history.lots).toHaveLength(1);
     expect(history.valuations).toHaveLength(1);
+  });
+});
+
+describe("history and reconciliation agree", () => {
+  beforeEach(resetTestDb);
+
+  test("a movement dated before the account opened is excluded, as reconciliation excludes it", () => {
+    const pko = createAccount({
+      name: "PKO",
+      balanceMinor: 500000,
+      openingMinor: 100000,
+      openedOn: "2026-07-31",
+    });
+    addTransactions([
+      // Predates the opening figure, which already contains it.
+      { date: "2026-05-07", total: "3000.00", type: "transfer", toAccountId: pko.id },
+      { date: "2026-08-10", total: "4000.00", type: "transfer", toAccountId: pko.id },
+    ]);
+
+    const movements = accountHistory(pko.id).movements;
+    expect(movements).toHaveLength(1);
+    expect(movements[0]?.runningMinor).toBe(500000);
+    // The running total agrees with the stated balance, so reconciliation stays silent
+    // for the same reason — the two can no longer disagree on screen.
+    expect(reconcileAccounts()).toHaveLength(0);
   });
 });
