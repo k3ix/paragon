@@ -191,3 +191,61 @@ export const holdings = sqliteTable("holdings", {
   archivedAt: integer("archived_at"),
   createdAt: integer("created_at").notNull().default(sql`(unixepoch())`),
 });
+
+/**
+ * Individual purchases.
+ *
+ * A lot records what was true at the moment of buying and never changes: the broker
+ * does not restate a completed trade. Growth per lot is deliberately absent — it would
+ * need a current price for every lot at every revaluation, and the portfolio-level
+ * figure answers the question without that bookkeeping.
+ */
+export const lots = sqliteTable(
+  "lots",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    holdingId: integer("holding_id")
+      .notNull()
+      .references(() => holdings.id, { onDelete: "cascade" }),
+    boughtOn: text("bought_on").notNull(),
+    // Units × 1 000 000. XTB reports four decimals (4.3823); three would round away a
+    // digit the broker actually gave us, and floats are not allowed near money.
+    quantityMicro: integer("quantity_micro").notNull(),
+    // Price per unit in the instrument's currency, minor units: 157.92 EUR is 15792.
+    priceMinor: integer("price_minor").notNull(),
+    currency: text("currency").notNull().default("EUR"),
+    // Rate to PLN at purchase, in millionths — the convention transactions.fxRate uses.
+    fxRate: integer("fx_rate"),
+    // What the purchase cost in PLN, as the broker reported it. Recorded rather than
+    // derived: for today's lots quantity × price × rate reproduces it to the grosz, but
+    // that holds only while the rate is clean and no per-trade fee applies, and a figure
+    // that is sometimes derived and sometimes stored is worse than one always recorded.
+    costMinor: integer("cost_minor").notNull(),
+    note: text("note"),
+    createdAt: integer("created_at").notNull().default(sql`(unixepoch())`),
+  },
+  (t) => [index("lots_holding_idx").on(t.holdingId)],
+);
+
+/**
+ * What a holding was worth, over time.
+ *
+ * `holdings.value_minor` keeps the newest figure and every existing reader goes on
+ * working; this is the history behind it. Without it each revaluation erased the last,
+ * so the portfolio's past was destroyed exactly as it accumulated.
+ */
+export const valuations = sqliteTable(
+  "valuations",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    holdingId: integer("holding_id")
+      .notNull()
+      .references(() => holdings.id, { onDelete: "cascade" }),
+    valuedOn: text("valued_on").notNull(),
+    valueMinor: integer("value_minor").notNull(),
+    createdAt: integer("created_at").notNull().default(sql`(unixepoch())`),
+  },
+  // One valuation per holding per day: revaluing twice in an afternoon is correcting a
+  // typo, not recording a second fact.
+  (t) => [uniqueIndex("valuations_holding_day_idx").on(t.holdingId, t.valuedOn)],
+);
