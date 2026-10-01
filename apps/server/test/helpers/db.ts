@@ -29,6 +29,12 @@ export function resetTestDb() {
   sqlite.exec("PRAGMA foreign_keys = OFF;");
   db.delete(schema.lineItems).run();
   db.delete(schema.transactions).run();
+  // Before holdings: lots and valuations reference it with ON DELETE cascade.
+  db.delete(schema.lots).run();
+  db.delete(schema.valuations).run();
+  // After transactions: both are referenced by them with ON DELETE RESTRICT.
+  db.delete(schema.accounts).run();
+  db.delete(schema.holdings).run();
   db.delete(schema.merchants).run();
   db.delete(schema.commitments).run();
   db.delete(schema.categories).run();

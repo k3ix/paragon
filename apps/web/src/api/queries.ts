@@ -37,6 +37,9 @@ function useInvalidateAll() {
       "commitments",
       "periods",
       "period-summary",
+      "assets",
+      "account-history",
+      "holding-history",
     ]) {
       qc.invalidateQueries({ queryKey: [key] });
     }
@@ -105,6 +108,41 @@ export function useBudget(month: string) {
     queryKey: ["budget", month],
     queryFn: async () => {
       const { data, error } = await client.api.budget.get({ query: { month } });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useAssets() {
+  return useQuery({
+    queryKey: ["assets"],
+    queryFn: async () => {
+      const { data, error } = await client.api.assets.get();
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useAccountHistory(id: number | null) {
+  return useQuery({
+    queryKey: ["account-history", id],
+    enabled: id !== null,
+    queryFn: async () => {
+      const { data, error } = await client.api.accounts({ id: String(id) }).history.get();
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useHoldingHistory(id: number | null) {
+  return useQuery({
+    queryKey: ["holding-history", id],
+    enabled: id !== null,
+    queryFn: async () => {
+      const { data, error } = await client.api.holdings({ id: String(id) }).history.get();
       if (error) throw error;
       return data;
     },

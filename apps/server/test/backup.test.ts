@@ -1,10 +1,11 @@
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
-import { existsSync, rmSync, mkdirSync } from "node:fs";
+import { existsSync, rmSync, mkdirSync, utimesSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import { resetTestDb } from "./helpers/db";
 import { createCategory } from "../src/services/categories";
 import { addTransactions } from "../src/services/transactions";
-import { createBackup, listBackups, pruneBackups } from "../src/services/backup";
+import { createBackup, listBackups, pruneBackups, backupIfStale } from "../src/services/backup";
 
 const DIR = "/tmp/paragon-backup-test";
 
@@ -132,5 +133,69 @@ describe("pruneBackups", () => {
   it("refuses to keep zero", () => {
     // Pruning to nothing is never intended and would delete every backup.
     expect(() => pruneBackups(0, DIR)).toThrow(/keep/i);
+  });
+});
+
+describe("backupIfStale", () => {
+  it("skips a backup when a recent one already exists", () => {
+    const first = backupIfStale(24, DIR);
+    expect(first).not.toBeNull();
+    const second = backupIfStale(24, DIR);
+    expect(second).toBeNull();
+    expect(listBackups(DIR)).toHaveLength(1);
+  });
+
+  it("writes one when the newest copy is old enough", () => {
+    // Age is read from the name, so the stale copy is written under an old one.
+    writeFileSync(join(DIR, "paragon-20260809-180918.db"), "an old snapshot");
+    expect(listBackups(DIR)).toHaveLength(1);
+
+    expect(backupIfStale(24, DIR)).not.toBeNull();
+    expect(listBackups(DIR)).toHaveLength(2);
+  });
+
+  it("writes the first one when nothing exists yet", () => {
+    expect(listBackups(DIR)).toHaveLength(0);
+    expect(backupIfStale(24, DIR)).not.toBeNull();
+  });
+});
+
+describe("automatic backup on write", () => {
+  it("does not write into the real backup directory from a test run", () => {
+    // DB_PATH is set by test/helpers/db, which is what marks this as not-live.
+    expect(process.env.DB_PATH).toBeTruthy();
+
+    const before = listBackups().length;
+    seed();
+    expect(listBackups()).toHaveLength(before);
+  });
+});
+
+describe("backup age comes from the filename, not the filesystem", () => {
+  it("still takes a backup when an old snapshot has a fresh mtime", () => {
+    // A cp, rsync or restore rewrites every mtime. The snapshot is still from August;
+    // only the filesystem thinks otherwise.
+    const august = join(DIR, "paragon-20260809-180918.db");
+    writeFileSync(august, "not really a database");
+    const now = new Date();
+    utimesSync(august, now, now);
+
+    expect(backupIfStale(24, DIR)).not.toBeNull();
+  });
+
+  it("orders by the day in the name, so pruning keeps the newest data", () => {
+    const names = [
+      "paragon-20260809-180918.db",
+      "paragon-20260930-153402.db",
+      "paragon-20260901-120000.db",
+    ];
+    // Written newest-name-first, so mtime order is the reverse of name order.
+    for (const name of names) writeFileSync(join(DIR, name), "x");
+
+    expect(listBackups(DIR).map((b) => b.path.split("/").pop())).toEqual([
+      "paragon-20260930-153402.db",
+      "paragon-20260901-120000.db",
+      "paragon-20260809-180918.db",
+    ]);
   });
 });

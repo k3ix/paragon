@@ -36,6 +36,20 @@
       "when": 1788848787157,
       "tag": "0004_starts_period",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1790774473932,
+      "tag": "0005_assets",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1790854568098,
+      "tag": "0006_asset_history",
+      "breakpoints": true
     }
   ]
 }

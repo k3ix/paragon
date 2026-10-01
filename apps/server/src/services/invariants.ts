@@ -1,4 +1,7 @@
+import { eq } from "drizzle-orm";
 import { parseAmountToMinor } from "../money";
+import { db } from "../db";
+import { accounts, holdings } from "../db/schema";
 import { findCategoryByPath } from "./categories";
 
 export type ResolvedLine = {
@@ -56,5 +59,57 @@ export function assertLinesMatchTotal(lines: ResolvedLine[], totalMinor: number)
       `Line items sum (${sum}) does not match the total (${totalMinor}). ` +
         `Difference: ${totalMinor - sum} minor units.`,
     );
+  }
+}
+
+export type AssetEndpoints = {
+  fromAccountId?: number | null;
+  toAccountId?: number | null;
+  fromHoldingId?: number | null;
+  toHoldingId?: number | null;
+};
+
+/**
+ * Checks that a transaction names at most one source and one destination, and that
+ * each exists.
+ *
+ * Money leaves one place and arrives in another. Naming an account and a holding on
+ * the same side describes nothing real, and reconciliation would have to guess which
+ * one to believe. A transfer to the account it came from is likewise incoherent: it
+ * nets to zero, so it reconciles clean while looking on screen like money that moved.
+ */
+export function checkAssetEndpoints(input: AssetEndpoints): void {
+  if (input.fromAccountId != null && input.fromHoldingId != null) {
+    throw new Error("A transaction cannot name both an account and a holding as its source");
+  }
+  if (input.toAccountId != null && input.toHoldingId != null) {
+    throw new Error("A transaction cannot name both an account and a holding as its destination");
+  }
+  if (
+    input.fromAccountId != null &&
+    input.toAccountId != null &&
+    input.fromAccountId === input.toAccountId
+  ) {
+    throw new Error("A transfer cannot move money to the account it came from");
+  }
+  if (
+    input.fromHoldingId != null &&
+    input.toHoldingId != null &&
+    input.fromHoldingId === input.toHoldingId
+  ) {
+    throw new Error("A transfer cannot move money to the holding it came from");
+  }
+
+  for (const id of [input.fromAccountId, input.toAccountId]) {
+    if (id == null) continue;
+    if (!db.select().from(accounts).where(eq(accounts.id, id)).get()) {
+      throw new Error(`Account not found: ${id}`);
+    }
+  }
+  for (const id of [input.fromHoldingId, input.toHoldingId]) {
+    if (id == null) continue;
+    if (!db.select().from(holdings).where(eq(holdings.id, id)).get()) {
+      throw new Error(`Holding not found: ${id}`);
+    }
   }
 }

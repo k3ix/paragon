@@ -1,11 +1,17 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { AddTransactionInput } from "@paragon/shared";
 import { db } from "../db";
-import { transactions, lineItems, merchants } from "../db/schema";
+import { transactions, lineItems, merchants, holdings } from "../db/schema";
 import { parseAmountToMinor } from "../money";
 import { normalizeMerchant, computeDedupHash } from "./dedup";
-import { resolveLines, assertLinesMatchTotal, type LineInput } from "./invariants";
+import {
+  resolveLines,
+  assertLinesMatchTotal,
+  checkAssetEndpoints,
+  type LineInput,
+} from "./invariants";
 import { listTransactions, type TransactionRow } from "./queries";
+import { backupIfStale } from "./backup";
 
 export type { AddTransactionInput };
 
@@ -70,7 +76,52 @@ function upsertMerchant(
  *   1. the line amounts must sum to the transaction total;
  *   2. a repeat of the same receipt returns already_exists instead of inserting.
  */
+/**
+ * Moves a holding's `invested` by what a transfer put in or took out.
+ *
+ * Every path that creates, edits or removes a transfer goes through here, so the figure
+ * cannot drift from the movements rendered beside it on screen. Expressed as SQL
+ * arithmetic rather than read-modify-write, and always called inside the caller's
+ * transaction, so the row and the holding commit together.
+ */
+function applyHoldingDelta(
+  tx: { update: typeof db.update },
+  row: { toHoldingId: number | null; fromHoldingId: number | null; totalMinor: number },
+  sign: 1 | -1,
+): void {
+  if (row.toHoldingId != null) {
+    const delta = sign * row.totalMinor;
+    tx.update(holdings)
+      .set({ investedMinor: sql`${holdings.investedMinor} + ${delta}` })
+      .where(eq(holdings.id, row.toHoldingId))
+      .run();
+  }
+  if (row.fromHoldingId != null) {
+    const delta = sign * row.totalMinor;
+    tx.update(holdings)
+      .set({ investedMinor: sql`${holdings.investedMinor} - ${delta}` })
+      .where(eq(holdings.id, row.fromHoldingId))
+      .run();
+  }
+}
+
 export function addTransactions(items: AddTransactionInput[]): AddResult[] {
+  // Once a day, before anything is written. Backups used to be taken by hand, which
+  // held while the code was being written and stopped the moment it wasn't — the newest
+  // copy was once seven weeks old. A failure here is swallowed on purpose: losing
+  // today's receipt to a full disk would be worse than the missing copy.
+  //
+  // Skipped when DB_PATH is set, which means this is not the live database. A test run
+  // would otherwise drop a copy of its own fixtures into backups/ and, worse, reset the
+  // age clock so the next real recording sees a fresh backup and skips its own.
+  if (!process.env.DB_PATH) {
+    try {
+      backupIfStale(24);
+    } catch (error) {
+      console.warn("Automatic backup failed, recording anyway:", error);
+    }
+  }
+
   return items.map((item) => addOne(item));
 }
 
@@ -81,6 +132,7 @@ function addOne(item: AddTransactionInput): AddResult {
   // Resolve categories before opening the transaction so a bad path fails cleanly.
   const resolved = resolveLines(item.lineItems, item.total);
   assertLinesMatchTotal(resolved, totalMinor);
+  checkAssetEndpoints(item);
 
   const merchantRaw = item.merchant ?? null;
   const merchantNorm = merchantRaw ? normalizeMerchant(merchantRaw) : "";
@@ -123,6 +175,10 @@ function addOne(item: AddTransactionInput): AddResult {
         account: item.account ?? null,
         note: item.note ?? null,
         startsPeriod: item.startsPeriod ?? true,
+        fromAccountId: item.fromAccountId ?? null,
+        toAccountId: item.toAccountId ?? null,
+        fromHoldingId: item.fromHoldingId ?? null,
+        toHoldingId: item.toHoldingId ?? null,
         dedupHash,
       })
       .returning({ id: transactions.id })
@@ -139,6 +195,16 @@ function addOne(item: AddTransactionInput): AddResult {
         })
         .run();
     }
+
+    // A holding's `invested` is the sum of what was put in, so a transfer has to move
+    // it. Left to be typed by hand it drifts the moment a second contribution is made,
+    // and every growth figure computed against it is then overstated by exactly the
+    // amount that went unrecorded.
+    applyHoldingDelta(tx, {
+      toHoldingId: item.toHoldingId ?? null,
+      fromHoldingId: item.fromHoldingId ?? null,
+      totalMinor,
+    }, 1);
 
     return { status: "created" as const, id: inserted.id };
   });
@@ -222,6 +288,19 @@ export function updateTransaction(
   }
 
   db.transaction((tx) => {
+    // The patch carries no asset endpoints, so they survive the edit unchanged — but
+    // the amount may not have. Reverse what the old row contributed and apply the new,
+    // or `invested` keeps a figure the movement list no longer shows.
+    applyHoldingDelta(tx, existing, -1);
+    applyHoldingDelta(
+      tx,
+      {
+        toHoldingId: existing.toHoldingId,
+        fromHoldingId: existing.fromHoldingId,
+        totalMinor,
+      },
+      1,
+    );
     const merchantId =
       merchantNorm && type !== "transfer"
         ? upsertMerchant(
@@ -272,6 +351,9 @@ export function deleteTransaction(id: number): { deleted: true } {
   // line_items has ON DELETE CASCADE, but the delete is explicit so the intent is
   // visible at the call site rather than resting on a schema detail.
   db.transaction((tx) => {
+    // Take the money back out of whatever holding this transfer fed, or the figure
+    // outlives the movement that justified it.
+    applyHoldingDelta(tx, existing, -1);
     tx.delete(lineItems).where(eq(lineItems.transactionId, id)).run();
     tx.delete(transactions).where(eq(transactions.id, id)).run();
   });

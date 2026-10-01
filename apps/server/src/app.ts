@@ -12,6 +12,16 @@ import {
   getCategoryTreeBreakdown,
   getCategoryTreeForRange,
 } from "./services/summary";
+import {
+  assetsSummary,
+  createAccount,
+  updateAccount,
+  createHolding,
+  revalueHolding,
+} from "./services/assets";
+import { addLot } from "./services/assets";
+import { accountHistory, holdingHistory } from "./services/asset-history";
+import { reconcileAccounts } from "./services/reconcile";
 import { getBudget } from "./services/budget";
 import { getPace } from "./services/pace";
 import { payPeriods, resolvePeriod } from "./services/periods";
@@ -33,6 +43,7 @@ import { createBackup, pruneBackups } from "./services/backup";
 // Matches the shape "YYYY-MM". The month *number* is still validated in the service,
 // because 2026-13 matches this pattern but is not a month.
 const monthPattern = "^\\d{4}-\\d{2}$";
+const dayPattern = "^\\d{4}-\\d{2}-\\d{2}$";
 const monthQuery = t.Object({ month: t.String({ pattern: monthPattern }) });
 
 // A period is either a calendar month or a pay period keyed by its start date.
@@ -173,6 +184,173 @@ export const app = new Elysia({ prefix: "/api" })
       perDayLeftMinor: t.Union([t.Number(), t.Null()]),
     }),
   })
+
+  // Stock, not flow: what is held, as against what moved. The reconciliation gaps ride
+  // along because they are only meaningful next to the balances they contradict.
+  // The response is declared rather than inferred: without it Eden hands the frontend
+  // `{}` and every field access there is unchecked.
+  .get("/assets", () => ({ ...assetsSummary(), reconciliation: reconcileAccounts() }), {
+    response: t.Object({
+      totalMinor: t.Number(),
+      accountsTotalMinor: t.Number(),
+      holdingsInvestedMinor: t.Number(),
+      holdingsValueMinor: t.Number(),
+      accounts: t.Array(
+        t.Object({
+          id: t.Number(),
+          name: t.String(),
+          currency: t.String(),
+          balanceMinor: t.Number(),
+          openingMinor: t.Number(),
+          openedOn: t.Union([t.String(), t.Null()]),
+          rateBp: t.Union([t.Number(), t.Null()]),
+          promoUntil: t.Union([t.String(), t.Null()]),
+        }),
+      ),
+      holdings: t.Array(
+        t.Object({
+          id: t.Number(),
+          name: t.String(),
+          kind: t.String(),
+          investedMinor: t.Number(),
+          valueMinor: t.Union([t.Number(), t.Null()]),
+          valuedAt: t.Union([t.String(), t.Null()]),
+          rateBp: t.Union([t.Number(), t.Null()]),
+          maturesOn: t.Union([t.String(), t.Null()]),
+          growthMinor: t.Union([t.Number(), t.Null()]),
+          growthPercent: t.Union([t.Number(), t.Null()]),
+        }),
+      ),
+      staleValuations: t.Array(
+        t.Object({
+          id: t.Number(),
+          name: t.String(),
+          valuedAt: t.Union([t.String(), t.Null()]),
+        }),
+      ),
+      expiringPromos: t.Array(
+        t.Object({ id: t.Number(), name: t.String(), promoUntil: t.String() }),
+      ),
+      reconciliation: t.Array(
+        t.Object({
+          accountId: t.Number(),
+          name: t.String(),
+          expectedMinor: t.Number(),
+          statedMinor: t.Number(),
+          differenceMinor: t.Number(),
+        }),
+      ),
+    }),
+  })
+
+  .post("/accounts", ({ body }) => createAccount(body), {
+    body: t.Object({
+      name: t.String({ minLength: 1 }),
+      balanceMinor: t.Integer(),
+      openingMinor: t.Integer(),
+      currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
+      openedOn: t.Optional(t.Union([t.String({ pattern: dayPattern }), t.Null()])),
+      rateBp: t.Optional(t.Union([t.Integer(), t.Null()])),
+      promoUntil: t.Optional(t.Union([t.String({ pattern: dayPattern }), t.Null()])),
+    }),
+  })
+
+  .patch("/accounts/:id", ({ params, body }) => updateAccount(Number(params.id), body), {
+    params: t.Object({ id: t.String() }),
+    body: t.Object({
+      name: t.Optional(t.String({ minLength: 1 })),
+      balanceMinor: t.Optional(t.Integer()),
+      openingMinor: t.Optional(t.Integer()),
+      openedOn: t.Optional(t.Union([t.String({ pattern: dayPattern }), t.Null()])),
+      rateBp: t.Optional(t.Union([t.Integer(), t.Null()])),
+      promoUntil: t.Optional(t.Union([t.String({ pattern: dayPattern }), t.Null()])),
+      archived: t.Optional(t.Boolean()),
+    }),
+  })
+
+  .post("/holdings", ({ body }) => createHolding(body), {
+    body: t.Object({
+      name: t.String({ minLength: 1 }),
+      kind: t.Union([t.Literal("equity"), t.Literal("bond")]),
+      investedMinor: t.Integer(),
+      rateBp: t.Optional(t.Union([t.Integer(), t.Null()])),
+      maturesOn: t.Optional(t.Union([t.String({ pattern: dayPattern }), t.Null()])),
+    }),
+  })
+
+  .patch(
+    "/holdings/:id/value",
+    ({ params, body }) => revalueHolding(Number(params.id), body.valueMinor, body.valuedAt),
+    {
+      params: t.Object({ id: t.String() }),
+      body: t.Object({
+        valueMinor: t.Integer(),
+        valuedAt: t.String({ pattern: dayPattern }),
+      }),
+    },
+  )
+
+  // History behind each figure: what built a balance, and what a portfolio was bought
+  // with. The columns these read were written when transfers learned to name an account
+  // or a holding; nothing read them back until now.
+  .get("/accounts/:id/history", ({ params }) => accountHistory(Number(params.id)), {
+    params: t.Object({ id: t.String() }),
+    response: t.Object({ movements: t.Array(t.Object({
+          id: t.Number(),
+          occurredOn: t.Number(),
+          totalMinor: t.Number(),
+          note: t.Union([t.String(), t.Null()]),
+          merchant: t.Union([t.String(), t.Null()]),
+          runningMinor: t.Number(),
+        })) }),
+  })
+
+  .get("/holdings/:id/history", ({ params }) => holdingHistory(Number(params.id)), {
+    params: t.Object({ id: t.String() }),
+    response: t.Object({
+      movements: t.Array(t.Object({
+          id: t.Number(),
+          occurredOn: t.Number(),
+          totalMinor: t.Number(),
+          note: t.Union([t.String(), t.Null()]),
+          merchant: t.Union([t.String(), t.Null()]),
+          runningMinor: t.Number(),
+        })),
+      lots: t.Array(
+        t.Object({
+          id: t.Number(),
+          holdingId: t.Number(),
+          boughtOn: t.String(),
+          quantityMicro: t.Number(),
+          priceMinor: t.Number(),
+          currency: t.String(),
+          fxRate: t.Union([t.Number(), t.Null()]),
+          costMinor: t.Number(),
+          note: t.Union([t.String(), t.Null()]),
+        }),
+      ),
+      valuations: t.Array(
+        t.Object({ id: t.Number(), valuedOn: t.String(), valueMinor: t.Number() }),
+      ),
+    }),
+  })
+
+  .post(
+    "/holdings/:id/lots",
+    ({ params, body }) => addLot({ holdingId: Number(params.id), ...body }),
+    {
+      params: t.Object({ id: t.String() }),
+      body: t.Object({
+        boughtOn: t.String({ pattern: dayPattern }),
+        quantityMicro: t.Integer(),
+        priceMinor: t.Integer(),
+        currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
+        fxRate: t.Optional(t.Union([t.Integer(), t.Null()])),
+        costMinor: t.Integer(),
+        note: t.Optional(t.Union([t.String(), t.Null()])),
+      }),
+    },
+  )
 
   .get("/commitments", () => listCommitments())
 

@@ -55,6 +55,24 @@ export const transactions = sqliteTable(
     payer: text("payer"),
     scope: text("scope"),
     account: text("account"),
+    // Where the money came from and went, when it is somewhere tracked. All four are
+    // usually null: a purchase names nothing, because everyday cards are deliberately
+    // not tracked — a card balance would disagree with reality by lunchtime, and a
+    // reconciliation warning that is always on is one nobody reads. Accounts and
+    // holdings get separate columns rather than a (kind, id) pair so the foreign keys
+    // survive.
+    fromAccountId: integer("from_account_id").references(() => accounts.id, {
+      onDelete: "restrict",
+    }),
+    toAccountId: integer("to_account_id").references(() => accounts.id, {
+      onDelete: "restrict",
+    }),
+    fromHoldingId: integer("from_holding_id").references(() => holdings.id, {
+      onDelete: "restrict",
+    }),
+    toHoldingId: integer("to_holding_id").references(() => holdings.id, {
+      onDelete: "restrict",
+    }),
     note: text("note"),
     // Whether this income opens a new pay period. Only a paycheque does. Money that
     // was earned earlier and merely surfaced now — a gift spent on a trip, a refund,
@@ -121,4 +139,113 @@ export const lineItems = sqliteTable(
     index("line_items_transaction_idx").on(t.transactionId),
     index("line_items_category_idx").on(t.categoryId),
   ],
+);
+
+/**
+ * Where money sits: savings accounts, cash, a foreign-currency balance.
+ *
+ * Everyday cards are deliberately absent. Their balance would diverge from reality
+ * within a day of ordinary spending, and an account that never reconciles teaches the
+ * reader to ignore the warning that says so.
+ */
+export const accounts = sqliteTable("accounts", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  currency: text("currency").notNull().default("PLN"),
+  // What the bank says today. Typed in rather than derived: the application sees only
+  // the movements it was told about, and this is the truth they are checked against.
+  balanceMinor: integer("balance_minor").notNull().default(0),
+  // The balance on the day this account entered the application. Reconciliation counts
+  // movements forward from here; without it there is nothing to count from.
+  openingMinor: integer("opening_minor").notNull().default(0),
+  openedOn: text("opened_on"),
+  // Annual rate in basis points: 4.25% is 425. An integer, because money and rates
+  // both lose to floating point.
+  rateBp: integer("rate_bp"),
+  // When a promotional rate lapses and the money should probably move.
+  promoUntil: text("promo_until"),
+  archivedAt: integer("archived_at"),
+  createdAt: integer("created_at").notNull().default(sql`(unixepoch())`),
+});
+
+/**
+ * What money is invested in: a brokerage portfolio, bonds.
+ *
+ * Purchase lots are deliberately absent. The question this answers is "what did it
+ * grow by", and invested against value answers it. Lots earn their place when a
+ * specific sale has to be taxed.
+ */
+export const holdings = sqliteTable("holdings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  // "equity" or "bond".
+  kind: text("kind").notNull(),
+  // Sum of what was put in, moved by transfers rather than typed.
+  investedMinor: integer("invested_minor").notNull().default(0),
+  // What it is worth now. NULL until the first valuation: a holding bought today has
+  // no price yet, and defaulting to zero would report it as a total loss.
+  valueMinor: integer("value_minor"),
+  valuedAt: text("valued_at"),
+  rateBp: integer("rate_bp"),
+  maturesOn: text("matures_on"),
+  archivedAt: integer("archived_at"),
+  createdAt: integer("created_at").notNull().default(sql`(unixepoch())`),
+});
+
+/**
+ * Individual purchases.
+ *
+ * A lot records what was true at the moment of buying and never changes: the broker
+ * does not restate a completed trade. Growth per lot is deliberately absent — it would
+ * need a current price for every lot at every revaluation, and the portfolio-level
+ * figure answers the question without that bookkeeping.
+ */
+export const lots = sqliteTable(
+  "lots",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    holdingId: integer("holding_id")
+      .notNull()
+      .references(() => holdings.id, { onDelete: "cascade" }),
+    boughtOn: text("bought_on").notNull(),
+    // Units × 1 000 000. XTB reports four decimals (4.3823); three would round away a
+    // digit the broker actually gave us, and floats are not allowed near money.
+    quantityMicro: integer("quantity_micro").notNull(),
+    // Price per unit in the instrument's currency, minor units: 157.92 EUR is 15792.
+    priceMinor: integer("price_minor").notNull(),
+    currency: text("currency").notNull().default("EUR"),
+    // Rate to PLN at purchase, in millionths — the convention transactions.fxRate uses.
+    fxRate: integer("fx_rate"),
+    // What the purchase cost in PLN, as the broker reported it. Recorded rather than
+    // derived: for today's lots quantity × price × rate reproduces it to the grosz, but
+    // that holds only while the rate is clean and no per-trade fee applies, and a figure
+    // that is sometimes derived and sometimes stored is worse than one always recorded.
+    costMinor: integer("cost_minor").notNull(),
+    note: text("note"),
+    createdAt: integer("created_at").notNull().default(sql`(unixepoch())`),
+  },
+  (t) => [index("lots_holding_idx").on(t.holdingId)],
+);
+
+/**
+ * What a holding was worth, over time.
+ *
+ * `holdings.value_minor` keeps the newest figure and every existing reader goes on
+ * working; this is the history behind it. Without it each revaluation erased the last,
+ * so the portfolio's past was destroyed exactly as it accumulated.
+ */
+export const valuations = sqliteTable(
+  "valuations",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    holdingId: integer("holding_id")
+      .notNull()
+      .references(() => holdings.id, { onDelete: "cascade" }),
+    valuedOn: text("valued_on").notNull(),
+    valueMinor: integer("value_minor").notNull(),
+    createdAt: integer("created_at").notNull().default(sql`(unixepoch())`),
+  },
+  // One valuation per holding per day: revaluing twice in an afternoon is correcting a
+  // typo, not recording a second fact.
+  (t) => [uniqueIndex("valuations_holding_day_idx").on(t.holdingId, t.valuedOn)],
 );
