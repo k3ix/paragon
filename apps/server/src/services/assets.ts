@@ -1,6 +1,6 @@
 import { eq, isNull, asc } from "drizzle-orm";
 import { db } from "../db";
-import { accounts, holdings } from "../db/schema";
+import { accounts, holdings, lots, valuations } from "../db/schema";
 
 export type Account = {
   id: number;
@@ -145,6 +145,9 @@ export function createHolding(input: HoldingInput): Holding {
     .values({
       name: input.name,
       kind: input.kind,
+      // An opening figure only. After creation this is moved by transfers, never typed:
+      // see addOne in transactions.ts. Lots deliberately do not touch it — the broker's
+      // purchase total and what left the card are different numbers.
       investedMinor: input.investedMinor,
       rateBp: input.rateBp ?? null,
       maturesOn: input.maturesOn ?? null,
@@ -172,6 +175,18 @@ export function revalueHolding(id: number, valueMinor: number, valuedAt: string)
     .where(eq(holdings.id, id))
     .returning()
     .get();
+
+  // History behind the headline figure. A repeat on the same day replaces rather than
+  // accumulates: revaluing twice in an afternoon is fixing a typo, not recording a
+  // second fact about the portfolio.
+  db.insert(valuations)
+    .values({ holdingId: id, valuedOn: valuedAt, valueMinor })
+    .onConflictDoUpdate({
+      target: [valuations.holdingId, valuations.valuedOn],
+      set: { valueMinor },
+    })
+    .run();
+
   return toHolding(row);
 }
 
@@ -251,4 +266,105 @@ export function assetsSummary(): AssetsSummary {
       .filter((a) => a.promoUntil !== null && a.promoUntil >= today && a.promoUntil <= monthAhead)
       .map((a) => ({ id: a.id, name: a.name, promoUntil: a.promoUntil as string })),
   };
+}
+
+export type Lot = {
+  id: number;
+  holdingId: number;
+  boughtOn: string;
+  quantityMicro: number;
+  priceMinor: number;
+  currency: string;
+  fxRate: number | null;
+  costMinor: number;
+  note: string | null;
+};
+
+export type LotInput = {
+  holdingId: number;
+  boughtOn: string;
+  quantityMicro: number;
+  priceMinor: number;
+  currency?: string;
+  fxRate?: number | null;
+  costMinor: number;
+  note?: string | null;
+};
+
+export type Valuation = { id: number; valuedOn: string; valueMinor: number };
+
+function requireHolding(id: number): void {
+  if (!db.select().from(holdings).where(eq(holdings.id, id)).get()) {
+    throw new Error(`Holding not found: ${id}`);
+  }
+}
+
+/**
+ * Records one purchase.
+ *
+ * Deliberately does not touch `invested_minor`: that is the sum of what left the card,
+ * and transfers maintain it. A lot is what the broker bought with the money after
+ * conversion and fees — 14 380.00 was transferred, 14 378.54 reached the shares, and
+ * both figures are true about different things.
+ */
+export function addLot(input: LotInput): Lot {
+  requireHolding(input.holdingId);
+
+  const row = db
+    .insert(lots)
+    .values({
+      holdingId: input.holdingId,
+      boughtOn: input.boughtOn,
+      quantityMicro: input.quantityMicro,
+      priceMinor: input.priceMinor,
+      currency: input.currency ?? "EUR",
+      fxRate: input.fxRate ?? null,
+      costMinor: input.costMinor,
+      note: input.note ?? null,
+    })
+    .returning()
+    .get();
+
+  return {
+    id: row.id,
+    holdingId: row.holdingId,
+    boughtOn: row.boughtOn,
+    quantityMicro: row.quantityMicro,
+    priceMinor: row.priceMinor,
+    currency: row.currency,
+    fxRate: row.fxRate,
+    costMinor: row.costMinor,
+    note: row.note,
+  };
+}
+
+/** Oldest first: a purchase history reads forwards. */
+export function listLots(holdingId: number): Lot[] {
+  return db
+    .select()
+    .from(lots)
+    .where(eq(lots.holdingId, holdingId))
+    .orderBy(asc(lots.boughtOn), asc(lots.id))
+    .all()
+    .map((row) => ({
+      id: row.id,
+      holdingId: row.holdingId,
+      boughtOn: row.boughtOn,
+      quantityMicro: row.quantityMicro,
+      priceMinor: row.priceMinor,
+      currency: row.currency,
+      fxRate: row.fxRate,
+      costMinor: row.costMinor,
+      note: row.note,
+    }));
+}
+
+export function listValuations(holdingId: number): Valuation[] {
+  return db
+    .select()
+    .from(valuations)
+    .where(eq(valuations.holdingId, holdingId))
+    .orderBy(asc(valuations.valuedOn))
+    .all()
+    .map((row) => ({ id: row.id, valuedOn: row.valuedOn, valueMinor: row.valueMinor }));
 }
