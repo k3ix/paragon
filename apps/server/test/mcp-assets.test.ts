@@ -69,3 +69,35 @@ describe("record_asset", () => {
     ).rejects.toThrow("Holding not found: 999");
   });
 });
+
+describe("record_asset add_lot", () => {
+  beforeEach(resetTestDb);
+
+  test("records a purchase and names the holding", async () => {
+    const xtb = createHolding({ name: "XTB", kind: "equity", investedMinor: 0 });
+    const result = await recordAsset({
+      action: "add_lot",
+      id: xtb.id,
+      boughtOn: "2026-05-07",
+      quantityMicro: 4382300,
+      priceMinor: 15792,
+      currency: "EUR",
+      fxRate: 4248200,
+      costMinor: 293998,
+    });
+    expect(result.content[0]?.text).toContain("XTB");
+    expect(result.content[0]?.text).toContain("2939.98");
+  });
+
+  test("refuses a purchase with no holding", async () => {
+    expect(
+      recordAsset({
+        action: "add_lot",
+        boughtOn: "2026-05-07",
+        quantityMicro: 1000000,
+        priceMinor: 10000,
+        costMinor: 40000,
+      }),
+    ).rejects.toThrow("add_lot needs the holding id");
+  });
+});

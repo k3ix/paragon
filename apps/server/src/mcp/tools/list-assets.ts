@@ -1,4 +1,4 @@
-import { assetsSummary } from "../../services/assets";
+import { assetsSummary, listLots } from "../../services/assets";
 import { reconcileAccounts } from "../../services/reconcile";
 import { formatMinor } from "../../money";
 
@@ -45,8 +45,11 @@ export async function handler() {
           ? ""
           : ` (${h.growthMinor >= 0 ? "+" : ""}${formatMinor(h.growthMinor)})`;
       const valued = h.valuedAt ? `, valued ${h.valuedAt}` : "";
+      // Says whether purchases are recorded, so a caller knows if add_lot is needed.
+      const lotCount = listLots(h.id).length;
+      const purchases = lotCount > 0 ? `, ${lotCount} purchases` : "";
       lines.push(
-        `  #${h.id} ${h.name} [${h.kind}]: invested ${formatMinor(h.investedMinor)}, now ${value}${growth}${valued}`,
+        `  #${h.id} ${h.name} [${h.kind}]: invested ${formatMinor(h.investedMinor)}, now ${value}${growth}${valued}${purchases}`,
       );
     }
     lines.push("");

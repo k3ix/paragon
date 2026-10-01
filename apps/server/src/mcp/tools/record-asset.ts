@@ -1,15 +1,22 @@
 import { z } from "zod";
-import { createAccount, createHolding, revalueHolding } from "../../services/assets";
+import {
+  createAccount,
+  createHolding,
+  revalueHolding,
+  addLot,
+  listHoldings,
+} from "../../services/assets";
 import { formatMinor } from "../../money";
 
 const dayPattern = /^\d{4}-\d{2}-\d{2}$/;
 
 export const inputSchema = {
   action: z
-    .enum(["create_account", "create_holding", "revalue"])
+    .enum(["create_account", "create_holding", "revalue", "add_lot"])
     .describe(
       "create_account for a place money sits, create_holding for something invested in, " +
-        "revalue to set what a holding is worth today.",
+        "revalue to set what a holding is worth today, add_lot to record one purchase " +
+        "with its date, quantity, price, rate and what it cost in PLN.",
     ),
   id: z.number().optional().describe("Holding to revalue. Required for revalue."),
   name: z.string().optional().describe("Required when creating."),
@@ -29,6 +36,23 @@ export const inputSchema = {
   rateBp: z.number().optional().describe("Annual rate in basis points: 4.25% is 425."),
   promoUntil: z.string().optional().describe("YYYY-MM-DD a promotional rate expires."),
   maturesOn: z.string().optional().describe("YYYY-MM-DD a bond matures."),
+  boughtOn: z.string().optional().describe("Day of the purchase, YYYY-MM-DD. Required for add_lot."),
+  quantityMicro: z
+    .number()
+    .optional()
+    .describe("Units bought × 1 000 000: 4.3823 units is 4382300. Required for add_lot."),
+  priceMinor: z
+    .number()
+    .optional()
+    .describe("Price per unit in the instrument's currency, minor units: 157.92 EUR is 15792."),
+  costMinor: z
+    .number()
+    .optional()
+    .describe("What the purchase cost in PLN as the broker reported it, minor units."),
+  fxRate: z
+    .number()
+    .optional()
+    .describe("Rate to PLN at purchase, in millionths: 4.2482 is 4248200."),
 };
 
 export const def = {
@@ -45,7 +69,7 @@ export const def = {
 };
 
 export type RecordAssetInput = {
-  action: "create_account" | "create_holding" | "revalue";
+  action: "create_account" | "create_holding" | "revalue" | "add_lot";
   id?: number;
   name?: string;
   kind?: "equity" | "bond";
@@ -58,6 +82,11 @@ export type RecordAssetInput = {
   rateBp?: number;
   promoUntil?: string;
   maturesOn?: string;
+  boughtOn?: string;
+  quantityMicro?: number;
+  priceMinor?: number;
+  costMinor?: number;
+  fxRate?: number;
 };
 
 function requireDay(value: string, field: string): string {
@@ -103,6 +132,39 @@ export async function handler(input: RecordAssetInput) {
         {
           type: "text" as const,
           text: `Recorded holding #${holding.id}: ${holding.name} [${holding.kind}], invested ${formatMinor(holding.investedMinor)}`,
+        },
+      ],
+    };
+  }
+
+  if (input.action === "add_lot") {
+    if (input.id === undefined) throw new Error("add_lot needs the holding id");
+    if (!input.boughtOn) throw new Error("add_lot needs boughtOn");
+    if (input.quantityMicro === undefined) throw new Error("add_lot needs quantityMicro");
+    if (input.priceMinor === undefined) throw new Error("add_lot needs priceMinor");
+    if (input.costMinor === undefined) throw new Error("add_lot needs costMinor");
+
+    const holding = listHoldings().find((h) => h.id === input.id);
+    if (!holding) throw new Error(`Holding not found: ${input.id}`);
+
+    const lot = addLot({
+      holdingId: input.id,
+      boughtOn: requireDay(input.boughtOn, "boughtOn"),
+      quantityMicro: input.quantityMicro,
+      priceMinor: input.priceMinor,
+      currency: input.currency ?? "EUR",
+      fxRate: input.fxRate ?? null,
+      costMinor: input.costMinor,
+    });
+
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text:
+            `Recorded lot #${lot.id} for ${holding.name}: ` +
+            `${(lot.quantityMicro / 1e6).toFixed(4)} units at ${formatMinor(lot.priceMinor)} ${lot.currency} ` +
+            `on ${lot.boughtOn}, ${formatMinor(lot.costMinor)} PLN`,
         },
       ],
     };
