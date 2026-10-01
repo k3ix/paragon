@@ -38,6 +38,8 @@ function useInvalidateAll() {
       "periods",
       "period-summary",
       "assets",
+      "account-history",
+      "holding-history",
     ]) {
       qc.invalidateQueries({ queryKey: [key] });
     }
@@ -117,6 +119,30 @@ export function useAssets() {
     queryKey: ["assets"],
     queryFn: async () => {
       const { data, error } = await client.api.assets.get();
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useAccountHistory(id: number | null) {
+  return useQuery({
+    queryKey: ["account-history", id],
+    enabled: id !== null,
+    queryFn: async () => {
+      const { data, error } = await client.api.accounts({ id: String(id) }).history.get();
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useHoldingHistory(id: number | null) {
+  return useQuery({
+    queryKey: ["holding-history", id],
+    enabled: id !== null,
+    queryFn: async () => {
+      const { data, error } = await client.api.holdings({ id: String(id) }).history.get();
       if (error) throw error;
       return data;
     },
