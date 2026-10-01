@@ -19,6 +19,8 @@ import {
   createHolding,
   revalueHolding,
 } from "./services/assets";
+import { addLot } from "./services/assets";
+import { accountHistory, holdingHistory } from "./services/asset-history";
 import { reconcileAccounts } from "./services/reconcile";
 import { getBudget } from "./services/budget";
 import { getPace } from "./services/pace";
@@ -284,6 +286,68 @@ export const app = new Elysia({ prefix: "/api" })
       body: t.Object({
         valueMinor: t.Integer(),
         valuedAt: t.String({ pattern: dayPattern }),
+      }),
+    },
+  )
+
+  // History behind each figure: what built a balance, and what a portfolio was bought
+  // with. The columns these read were written when transfers learned to name an account
+  // or a holding; nothing read them back until now.
+  .get("/accounts/:id/history", ({ params }) => accountHistory(Number(params.id)), {
+    params: t.Object({ id: t.String() }),
+    response: t.Object({ movements: t.Array(t.Object({
+          id: t.Number(),
+          occurredOn: t.Number(),
+          totalMinor: t.Number(),
+          note: t.Union([t.String(), t.Null()]),
+          merchant: t.Union([t.String(), t.Null()]),
+          runningMinor: t.Number(),
+        })) }),
+  })
+
+  .get("/holdings/:id/history", ({ params }) => holdingHistory(Number(params.id)), {
+    params: t.Object({ id: t.String() }),
+    response: t.Object({
+      movements: t.Array(t.Object({
+          id: t.Number(),
+          occurredOn: t.Number(),
+          totalMinor: t.Number(),
+          note: t.Union([t.String(), t.Null()]),
+          merchant: t.Union([t.String(), t.Null()]),
+          runningMinor: t.Number(),
+        })),
+      lots: t.Array(
+        t.Object({
+          id: t.Number(),
+          holdingId: t.Number(),
+          boughtOn: t.String(),
+          quantityMicro: t.Number(),
+          priceMinor: t.Number(),
+          currency: t.String(),
+          fxRate: t.Union([t.Number(), t.Null()]),
+          costMinor: t.Number(),
+          note: t.Union([t.String(), t.Null()]),
+        }),
+      ),
+      valuations: t.Array(
+        t.Object({ id: t.Number(), valuedOn: t.String(), valueMinor: t.Number() }),
+      ),
+    }),
+  })
+
+  .post(
+    "/holdings/:id/lots",
+    ({ params, body }) => addLot({ holdingId: Number(params.id), ...body }),
+    {
+      params: t.Object({ id: t.String() }),
+      body: t.Object({
+        boughtOn: t.String({ pattern: dayPattern }),
+        quantityMicro: t.Integer(),
+        priceMinor: t.Integer(),
+        currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
+        fxRate: t.Optional(t.Union([t.Integer(), t.Null()])),
+        costMinor: t.Integer(),
+        note: t.Optional(t.Union([t.String(), t.Null()])),
       }),
     },
   )
